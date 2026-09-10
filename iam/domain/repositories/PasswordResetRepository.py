@@ -1,0 +1,9 @@
+from typing import Protocol
+
+from iam.domain.model.aggregates.PasswordReset import PasswordReset
+
+
+class PasswordResetRepository(Protocol):
+    async def create(self, entry: PasswordReset) -> PasswordReset: ...
+    async def find_latest_active(self, user_id: int) -> PasswordReset | None: ...
+    async def invalidate_all_for_user(self, user_id: int) -> None: ...
