@@ -10,9 +10,9 @@ from iam.domain.model.aggregates.Role import Role
 from iam.domain.model.aggregates.User import User
 from iam.interface.api.rest.controllers.AuthController import router as auth_router
 from iam.interface.api.rest.controllers.AdminController import router as admin_router
-from iam.interface.api.rest.controllers.SignUpController import router as signup_router
 from iam.interface.api.rest.controllers.AdminRegistrationController import router as admin_reg_router
-from iam.interface.api.rest.controllers.PasswordResetController import router as password_reset_router
+from cell_management.interface.api.rest.controllers.CellController import router as cell_router
+from cell_management.interface.api.rest.controllers.ComponentController import router as component_router
 
 logger = logging.getLogger(__name__)
 
@@ -48,22 +48,21 @@ async def cleanup_expired_suspensions():
                 )
                 users = list(result.scalars().all())
                 deleted = 0
-                earliest_future = None
+                earliest_future = next_wake
 
                 for user in users:
                     expires = user.expires_at.replace(tzinfo=timezone.utc) if user.expires_at.tzinfo is None else user.expires_at
                     if now >= expires:
                         await session.delete(user)
                         deleted += 1
-                    elif earliest_future is None or expires < earliest_future:
+                    elif expires < earliest_future:
                         earliest_future = expires
 
                 if deleted:
                     await session.commit()
                     logger.info(f"Auto-deleted {deleted} expired user(s)")
 
-                if earliest_future:
-                    next_wake = earliest_future
+                next_wake = earliest_future
 
             sleep_seconds = max((next_wake - datetime.now(timezone.utc)).total_seconds(), 60)
             logger.info(f"Next cleanup check in {sleep_seconds:.0f}s")
@@ -76,7 +75,7 @@ async def cleanup_expired_suspensions():
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_: FastAPI):
     await init_db()
     await seed_roles()
     task = asyncio.create_task(cleanup_expired_suspensions())
@@ -86,17 +85,17 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="IAM Backend",
-    description="Identity and Access Management API",
+    title="VoltCast Backend",
+    description="RESTful API",
     version="1.0.0",
     lifespan=lifespan,
 )
 
 app.include_router(auth_router)
 app.include_router(admin_router)
-app.include_router(signup_router)
 app.include_router(admin_reg_router)
-app.include_router(password_reset_router)
+app.include_router(cell_router)
+app.include_router(component_router)
 
 
 @app.get("/")

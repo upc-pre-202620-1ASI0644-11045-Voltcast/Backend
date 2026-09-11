@@ -1,8 +1,8 @@
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
-import jwt
-from jwt.exceptions import InvalidTokenError
+import jwt  # type: ignore[attr-defined]
+from jwt.exceptions import InvalidTokenError  # type: ignore[attr-defined]
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -44,7 +44,7 @@ class JWTService:
             "exp": expire
         }
 
-        token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
+        token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)  # type: ignore[attr-defined]
         return token
 
     def create_refresh_token(self, user_id: int) -> str:
@@ -60,7 +60,7 @@ class JWTService:
             "exp": expire
         }
 
-        token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
+        token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)  # type: ignore[attr-defined]
         return token
 
     def decode_token(self, token: str) -> dict[str, Any]:
@@ -69,7 +69,7 @@ class JWTService:
         Raises InvalidTokenError if token is invalid or expired
         """
         try:
-            return jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+            return jwt.decode(token, self.secret_key, algorithms=[self.algorithm])  # type: ignore[attr-defined]
         except InvalidTokenError as e:
             raise ValueError(f"Invalid token: {str(e)}")
 

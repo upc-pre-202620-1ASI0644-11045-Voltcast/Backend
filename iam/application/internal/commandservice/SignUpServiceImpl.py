@@ -24,7 +24,7 @@ class SignUpServiceImpl:
         self._registration_repo = registration_repo
         self._user_repo = user_repo
 
-    # ── US024: Ingeniero crea solicitud de registro ─────────────────────────
+    # US024: Ingeniero crea solicitud de registro
 
     async def create_sign_up_request(self, command: CreateSignUpRequestCommand) -> RegistrationRequest:
         email = command.email.lower().strip()
@@ -56,7 +56,7 @@ class SignUpServiceImpl:
 
         return request
 
-    # ── US020: Supervisor aprueba solicitud ─────────────────────────────────
+    # US020: Supervisor aprueba solicitud
 
     async def approve_request(self, command: ApproveSignUpRequestCommand) -> User:
         request = await self._registration_repo.find_by_id(command.request_id)
@@ -83,7 +83,7 @@ class SignUpServiceImpl:
         )
         return await self._user_repo.save(user)
 
-    # ── US020: Supervisor rechaza solicitud ─────────────────────────────────
+    # US020: Supervisor rechaza solicitud
 
     async def reject_request(self, command: RejectSignUpRequestCommand) -> RegistrationRequest:
         request = await self._registration_repo.find_by_id(command.request_id)

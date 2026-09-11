@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from iam.domain.model.aggregates.RegistrationRequest import RegistrationStatus
 

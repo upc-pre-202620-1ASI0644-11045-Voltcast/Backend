@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
-from sqlalchemy import DateTime, Integer
+
+from sqlalchemy import DateTime
 from sqlalchemy.orm import Mapped, mapped_column, declared_attr
+
 from shared.infrastructure.persistence.configuration.database_configuration import Base
 
 
@@ -31,5 +33,5 @@ class BaseEntity(Base):
     )
 
     @declared_attr.directive
-    def __tablename__(cls) -> str:
-        return cls.__name__.lower()
+    def __tablename__(self) -> str:
+        return self.__name__.lower()

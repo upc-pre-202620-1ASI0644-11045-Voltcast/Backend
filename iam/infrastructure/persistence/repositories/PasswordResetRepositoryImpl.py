@@ -2,7 +2,6 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from iam.domain.model.aggregates.PasswordReset import PasswordReset
-from iam.domain.repositories.PasswordResetRepository import PasswordResetRepository
 
 
 class PasswordResetRepositoryImpl:

@@ -4,23 +4,19 @@ import bcrypt
 from sqlalchemy import String, Integer, ForeignKey, PrimaryKeyConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from shared.infrastructure.persistence.configuration.database_configuration import Base
-
-
-def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+from iam.domain.model.aggregates.Role import Role
+from shared.domain.model.aggregates.base_entity import BaseEntity, utc_now
 
 
 SUSPENSION_GRACE_DAYS = 30
-
 PERMISSION_PROFILE_EDIT    = "profile_edit"
 PERMISSION_PASSWORD_CHANGE = "password_change"
 
 
-class UserPermission(Base):
+class UserPermission(BaseEntity):
     """
-    Tabla normalizada de permisos por usuario.
-    PK compuesta (user_id, permission_type) — sin id serial innecesario.
+    Tabla normalizada de permisos por usuario
+    PK compuesta (user_id, permission_type)
     """
     __tablename__ = "user_permissions"
     __table_args__ = (
@@ -32,38 +28,31 @@ class UserPermission(Base):
     granted_at: Mapped[datetime] = mapped_column(default=utc_now)
 
 
-class User(Base):
+class User(BaseEntity):
     """
     Aggregate Root: Usuario del sistema IAM.
     Maneja autenticación, roles (FK a roles) y permisos de edición.
     """
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True)
 
-    # ── Role (FK a roles) ──────────────────────────────────────────────────
     role_id: Mapped[int] = mapped_column(Integer, ForeignKey("roles.id"), nullable=False)
-    role: Mapped["Role"] = relationship("Role", lazy="joined")
+    role: Mapped[Role] = relationship("Role", lazy="joined")
 
-    # ── Permisos de edición (tabla normalizada user_permissions) ────────────
-    permissions: Mapped[list["UserPermission"]] = relationship(
+    permissions: Mapped[list[UserPermission]] = relationship(
         "UserPermission",
         cascade="all, delete-orphan",
         lazy="selectin",
         foreign_keys="UserPermission.user_id",
     )
 
-    # ── Suspensión con gracia de 30 días ───────────────────────────────────
     suspended_at: Mapped[datetime | None] = mapped_column(nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(nullable=True, index=True)
-
-    created_at: Mapped[datetime] = mapped_column(default=utc_now)
-    updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now)
 
     # =========================================================================
     # DOMAIN LOGIC — Password
@@ -163,18 +152,6 @@ class User(Base):
 
     def _revoke_permission(self, permission_type: str) -> None:
         self.permissions = [p for p in self.permissions if p.permission_type != permission_type]
-
-    # =========================================================================
-    # DOMAIN LOGIC — Role
-    # =========================================================================
-
-    def assign_role(self, role_name: str) -> None:
-        from iam.domain.model.aggregates.Role import Role
-        if role_name.upper() == "ADMIN":
-            raise ValueError("Admin role cannot be assigned through the application")
-        # role_name will be resolved to Role object at service layer
-        self._pending_role_name = role_name
-        self.updated_at = utc_now()
 
     # =========================================================================
     # DOMAIN LOGIC — Account lifecycle

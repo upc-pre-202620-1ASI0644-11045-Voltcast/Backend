@@ -13,7 +13,7 @@ def utc_now() -> datetime:
 class Role(Base):
     """
     Catálogo de roles del sistema.
-    Seedeados al iniciar: ADMIN (Supervisor), USER (Ingeniero de Planta).
+    ADMIN (Supervisor), USER (Ingeniero de Planta).
     """
     __tablename__ = "roles"
 

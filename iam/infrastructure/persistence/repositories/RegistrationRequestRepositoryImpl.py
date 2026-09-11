@@ -2,7 +2,6 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from iam.domain.model.aggregates.RegistrationRequest import RegistrationRequest, RegistrationStatus
-from iam.domain.repositories.RegistrationRequestRepository import RegistrationRequestRepository
 
 
 class RegistrationRequestRepositoryImpl:
