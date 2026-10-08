@@ -24,6 +24,7 @@ from iam.interface.api.rest.resources.PasswordResetResource import (
     ConfirmPasswordResetRequest,
 )
 from shared.infrastructure.persistence.configuration.database_configuration import get_db_session
+from shared.infrastructure.security.rate_limiter import rate_limit
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 
@@ -32,7 +33,12 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 # PUBLIC — No token required
 # =============================================================================
 
-@router.post("/login", response_model=AuthenticationResponse, summary="Log in")
+@router.post(
+    "/login",
+    response_model=AuthenticationResponse,
+    summary="Log in",
+    dependencies=[Depends(rate_limit("login", max_requests=10, window_seconds=60))],
+)
 async def login(
     request: SignInRequest,
     db: AsyncSession = Depends(get_db_session),
@@ -62,7 +68,13 @@ async def refresh_token(
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
 
-@router.post("/register", response_model=UserResponse, status_code=201, summary="Request account creation")
+@router.post(
+    "/register",
+    response_model=UserResponse,
+    status_code=201,
+    summary="Request account creation",
+    dependencies=[Depends(rate_limit("register", max_requests=5, window_seconds=3600))],
+)
 async def register(
     request: RegisterRequest,
     db: AsyncSession = Depends(get_db_session),
@@ -81,6 +93,7 @@ async def register(
     "/password-reset/request",
     response_model=MessageResponse,
     summary="Request a password reset code by email",
+    dependencies=[Depends(rate_limit("password-reset-request", max_requests=5, window_seconds=3600))],
 )
 async def request_password_reset(
     request: RequestPasswordResetRequest,
@@ -98,6 +111,7 @@ async def request_password_reset(
     "/password-reset/confirm",
     response_model=MessageResponse,
     summary="Confirm the verification code and set a new password",
+    dependencies=[Depends(rate_limit("password-reset-confirm", max_requests=10, window_seconds=3600))],
 )
 async def confirm_password_reset(
     request: ConfirmPasswordResetRequest,

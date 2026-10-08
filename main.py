@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy import select
 
+from shared.infrastructure.cache.redis_client import close_redis
 from shared.infrastructure.persistence.configuration.database_configuration import init_db, close_db, AsyncSessionLocal
 from iam.domain.model.aggregates.Role import Role, ROLE_ADMIN, ROLE_USER
 from iam.domain.model.aggregates.User import User, UserStatus
@@ -59,6 +60,7 @@ async def lifespan(_: FastAPI):
     await seed_roles()
     await seed_supervisor()
     yield
+    await close_redis()
     await close_db()
 
 
