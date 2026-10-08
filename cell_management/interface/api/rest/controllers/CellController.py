@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from cell_management.application.internal.commandservice.CellCommandServiceImpl import CellCommandServiceImpl
 from cell_management.application.internal.queryservice.CellQueryServiceImpl import CellQueryServiceImpl
 from cell_management.infrastructure.persistence.repositories.CellRepositoryImpl import CellRepositoryImpl
+from cell_management.infrastructure.persistence.repositories.ComponentRepositoryImpl import ComponentRepositoryImpl
 from cell_management.interface.api.rest.assemblers.CellResourceAssembler import CellResourceAssembler
 from cell_management.interface.api.rest.resources.CellResource import CellRequest, CellUpdateRequest, CellResponse
 from iam.domain.model.aggregates.User import User
@@ -65,7 +66,7 @@ async def create_cell(
 ):
     try:
         repository = CellRepositoryImpl(db)
-        service = CellCommandServiceImpl(repository)
+        service = CellCommandServiceImpl(repository, ComponentRepositoryImpl(db))
         command = CellResourceAssembler.to_create_command(request)
         cell = await service.create_cell(command)
         return CellResourceAssembler.to_response(cell)
@@ -88,7 +89,7 @@ async def update_cell(
 ):
     try:
         repository = CellRepositoryImpl(db)
-        service = CellCommandServiceImpl(repository)
+        service = CellCommandServiceImpl(repository, ComponentRepositoryImpl(db))
         command = CellResourceAssembler.to_update_command(cell_id, request)
         cell = await service.update_cell(command)
         return CellResourceAssembler.to_response(cell)
@@ -105,13 +106,14 @@ async def update_cell(
 @router.patch("/{cell_id}/disable", response_model=CellResponse, summary="Disable cell")
 async def disable_cell(
     cell_id: int = Path(...),
+    release_components: bool = Query(False, description="Release assigned cathodes/anodes before disabling"),
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
     try:
         repository = CellRepositoryImpl(db)
-        service = CellCommandServiceImpl(repository)
-        command = CellResourceAssembler.to_disable_command(cell_id)
+        service = CellCommandServiceImpl(repository, ComponentRepositoryImpl(db))
+        command = CellResourceAssembler.to_disable_command(cell_id, release_components)
         cell = await service.disable_cell(command)
         return CellResourceAssembler.to_response(cell)
     except ValueError as e:

@@ -1,4 +1,4 @@
-from cell_management.domain.model.aggregates.Component import Component, ComponentAssignmentHistory
+from cell_management.domain.model.aggregates.Component import Component
 from cell_management.domain.model.queries.ComponentQueries import (
     GetComponentByIdQuery,
     GetAllComponentsQuery,
@@ -20,6 +20,3 @@ class ComponentQueryServiceImpl:
             cell_id=query.cell_id,
             is_active=query.is_active,
         )
-
-    async def get_component_history(self, component_id: int) -> list[ComponentAssignmentHistory]:
-        return await self._repository.find_history_by_component(component_id)

@@ -1,4 +1,4 @@
-from cell_management.domain.model.aggregates.Component import Component, ComponentAssignmentHistory
+from cell_management.domain.model.aggregates.Component import Component, ComponentType
 from cell_management.domain.model.commands.ComponentCommands import (
     CreateComponentCommand,
     UpdateComponentCommand,
@@ -16,7 +16,6 @@ from cell_management.interface.api.rest.resources.ComponentResource import (
     ComponentAssignRequest,
     ComponentSwapRequest,
     ComponentResponse,
-    AssignmentHistoryResponse,
 )
 
 
@@ -25,8 +24,8 @@ class ComponentResourceAssembler:
     @staticmethod
     def to_create_command(request: ComponentRequest) -> CreateComponentCommand:
         return CreateComponentCommand(
-            name=request.name,
-            type=request.type,
+            type=ComponentType[request.type],
+            serial_code=request.serial_code,
             cell_id=request.cell_id,
         )
 
@@ -34,8 +33,8 @@ class ComponentResourceAssembler:
     def to_update_command(component_id: int, request: ComponentUpdateRequest) -> UpdateComponentCommand:
         return UpdateComponentCommand(
             component_id=component_id,
-            name=request.name,
-            type=request.type,
+            serial_code=request.serial_code,
+            type=ComponentType[request.type] if request.type else None,
         )
 
     @staticmethod
@@ -63,28 +62,18 @@ class ComponentResourceAssembler:
         cell_id: int | None = None,
         is_active: bool | None = None,
     ) -> GetAllComponentsQuery:
-        return GetAllComponentsQuery(component_type=component_type, cell_id=cell_id, is_active=is_active)
+        return GetAllComponentsQuery(
+            component_type=ComponentType[component_type] if component_type else None,
+            cell_id=cell_id,
+            is_active=is_active,
+        )
 
     @staticmethod
     def to_response(component: Component) -> ComponentResponse:
         return ComponentResponse(
             id=component.id,
-            name=component.name,
-            type=component.type,
+            type=ComponentType(component.type).name,
+            serial_code=component.serial_code,
             is_active=component.is_active,
             cell_id=component.cell_id,
-            created_at=component.created_at,
-            updated_at=component.updated_at,
-        )
-
-    @staticmethod
-    def to_history_response(history: ComponentAssignmentHistory) -> AssignmentHistoryResponse:
-        return AssignmentHistoryResponse(
-            id=history.id,
-            component_id=history.component_id,
-            from_cell_id=history.from_cell_id,
-            to_cell_id=history.to_cell_id,
-            action=history.action,
-            performed_at=history.performed_at,
-            created_at=history.created_at,
         )

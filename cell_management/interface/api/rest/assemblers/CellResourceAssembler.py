@@ -19,15 +19,15 @@ class CellResourceAssembler:
 
     @staticmethod
     def to_create_command(request: CellRequest) -> CreateCellCommand:
-        return CreateCellCommand(name=request.name, voltage=request.voltage)
+        return CreateCellCommand(name=request.name)
 
     @staticmethod
     def to_update_command(cell_id: int, request: CellUpdateRequest) -> UpdateCellCommand:
-        return UpdateCellCommand(cell_id=cell_id, name=request.name, voltage=request.voltage)
+        return UpdateCellCommand(cell_id=cell_id, name=request.name)
 
     @staticmethod
-    def to_disable_command(cell_id: int) -> DisableCellCommand:
-        return DisableCellCommand(cell_id=cell_id)
+    def to_disable_command(cell_id: int, release_components: bool = False) -> DisableCellCommand:
+        return DisableCellCommand(cell_id=cell_id, release_components=release_components)
 
     @staticmethod
     def to_get_by_id_query(cell_id: int) -> GetCellByIdQuery:
@@ -42,8 +42,6 @@ class CellResourceAssembler:
         return CellResponse(
             id=cell.id,
             name=cell.name,
-            voltage=cell.voltage,
+            barcode_value=cell.barcode_value,
             is_active=cell.is_active,
-            created_at=cell.created_at,
-            updated_at=cell.updated_at,
         )

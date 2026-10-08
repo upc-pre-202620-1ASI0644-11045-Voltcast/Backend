@@ -1,18 +1,20 @@
 from dataclasses import dataclass
 
+from cell_management.domain.model.aggregates.Component import ComponentType
+
 
 @dataclass(frozen=True)
 class CreateComponentCommand:
-    name: str
-    type: str  # CATHODE | ANODE
+    type: ComponentType
+    serial_code: str
     cell_id: int | None = None
 
 
 @dataclass(frozen=True)
 class UpdateComponentCommand:
     component_id: int
-    name: str | None = None
-    type: str | None = None
+    serial_code: str | None = None
+    type: ComponentType | None = None
 
 
 @dataclass(frozen=True)

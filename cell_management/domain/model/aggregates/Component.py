@@ -1,24 +1,28 @@
-from typing import Literal
-from sqlalchemy import String, Boolean, Integer, ForeignKey, DateTime
+from enum import IntEnum
+
+from sqlalchemy import String, Boolean, SmallInteger, ForeignKey, text
+from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column
 
-from shared.domain.model.aggregates.base_entity import BaseEntity, utc_now
-
-ComponentType = Literal["CATHODE", "ANODE"]
+from shared.infrastructure.persistence.configuration.database_configuration import Base
 
 
-class Component(BaseEntity):
+class ComponentType(IntEnum):
+    CATHODE = 0
+    ANODE = 1
+
+
+class Component(Base):
     """
-    Componente (cátodo o ánodo) asignado a una celda eléctrica.
+    Componente (cátodo o ánodo) que puede estar asignado a una celda eléctrica.
     """
-    __tablename__ = "components"
+    __tablename__ = "component"
 
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
-    type: Mapped[str] = mapped_column(String(10), nullable=False)  # CATHODE | ANODE
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    cell_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("cells.id", ondelete="SET NULL"), nullable=True, index=True
-    )
+    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, autoincrement=True)
+    type: Mapped[int] = mapped_column(TINYINT(1), nullable=False)  # ComponentType: 0 = cátodo, 1 = ánodo
+    serial_code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("1"), nullable=False)
+    cell_id: Mapped[int | None] = mapped_column(SmallInteger, ForeignKey("cell.id"), nullable=True)
 
     def assign_to(self, cell_id: int) -> None:
         if not self.is_active:
@@ -31,37 +35,12 @@ class Component(BaseEntity):
     def disable(self) -> None:
         if not self.is_active:
             raise ValueError("Component is already disabled")
+        if self.cell_id is not None:
+            raise ValueError("Component is in use: it is assigned to a cell")
         self.is_active = False
-        self.cell_id = None
 
-    def enable(self) -> None:
-        if self.is_active:
-            raise ValueError("Component is already active")
-        self.is_active = True
-
-    def update_info(self, name: str | None = None, component_type: str | None = None) -> None:
-        if name is not None:
-            self.name = name
+    def update_info(self, serial_code: str | None = None, component_type: ComponentType | None = None) -> None:
+        if serial_code is not None:
+            self.serial_code = serial_code
         if component_type is not None:
-            if component_type not in ("CATHODE", "ANODE"):
-                raise ValueError("Type must be CATHODE or ANODE")
-            self.type = component_type
-
-
-class ComponentAssignmentHistory(BaseEntity):
-    """
-    Historial de asignaciones, intercambios y deshabilitaciones de componentes.
-    """
-    __tablename__ = "component_assignment_history"
-
-    component_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("components.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    from_cell_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("cells.id", ondelete="SET NULL"), nullable=True
-    )
-    to_cell_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("cells.id", ondelete="SET NULL"), nullable=True
-    )
-    action: Mapped[str] = mapped_column(String(20), nullable=False)  # ASSIGNED | SWAPPED | UNASSIGNED | DISABLED
-    performed_at = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+            self.type = int(component_type)

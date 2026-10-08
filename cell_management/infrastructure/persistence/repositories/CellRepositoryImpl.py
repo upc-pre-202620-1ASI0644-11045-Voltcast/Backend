@@ -27,7 +27,7 @@ class CellRepositoryImpl:
         stmt = select(Cell)
         if is_active is not None:
             stmt = stmt.where(Cell.is_active == is_active)
-        stmt = stmt.order_by(Cell.created_at.desc())
+        stmt = stmt.order_by(Cell.id.desc())
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 

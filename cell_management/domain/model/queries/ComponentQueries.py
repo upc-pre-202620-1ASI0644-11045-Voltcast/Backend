@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from cell_management.domain.model.aggregates.Component import ComponentType
+
 
 @dataclass(frozen=True)
 class GetComponentByIdQuery:
@@ -8,6 +10,6 @@ class GetComponentByIdQuery:
 
 @dataclass(frozen=True)
 class GetAllComponentsQuery:
-    component_type: str | None = None
+    component_type: ComponentType | None = None
     cell_id: int | None = None
     is_active: bool | None = None

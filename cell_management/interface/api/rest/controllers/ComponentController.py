@@ -12,7 +12,7 @@ from cell_management.interface.api.rest.resources.ComponentResource import (
     ComponentAssignRequest,
     ComponentSwapRequest,
     ComponentResponse,
-    AssignmentHistoryResponse,
+    ComponentTypeName,
 )
 from iam.domain.model.aggregates.User import User
 from iam.infrastructure.tokenservice.jwt.BearerTokenService import get_current_active_user
@@ -27,7 +27,7 @@ router = APIRouter(prefix="/api/v1/components", tags=["Component Management"])
 
 @router.get("", response_model=list[ComponentResponse], summary="List all components")
 async def list_components(
-    component_type: str | None = Query(None, description="Filter by type (CATHODE or ANODE)"),
+    component_type: ComponentTypeName | None = Query(None, description="Filter by type (CATHODE or ANODE)"),
     cell_id: int | None = Query(None, description="Filter by assigned cell ID"),
     is_active: bool | None = Query(None, description="Filter by active status"),
     _: User = Depends(get_current_active_user),
@@ -109,21 +109,6 @@ async def get_component(
         return ComponentResourceAssembler.to_response(component)
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
-
-
-@router.get("/{component_id}/history", response_model=list[AssignmentHistoryResponse], summary="Get component assignment history")
-async def get_component_history(
-    component_id: int = Path(...),
-    _: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db_session),
-):
-    try:
-        repository = ComponentRepositoryImpl(db)
-        service = ComponentQueryServiceImpl(repository)
-        history = await service.get_component_history(component_id)
-        return [ComponentResourceAssembler.to_history_response(h) for h in history]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 

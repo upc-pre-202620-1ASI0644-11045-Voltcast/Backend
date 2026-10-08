@@ -5,30 +5,38 @@ from cell_management.domain.model.commands.CellCommands import (
     DisableCellCommand,
 )
 from cell_management.domain.repositories.CellRepository import CellRepository
+from cell_management.domain.repositories.ComponentRepository import ComponentRepository
 
 
 class CellCommandServiceImpl:
 
-    def __init__(self, repository: CellRepository):
+    def __init__(self, repository: CellRepository, component_repository: ComponentRepository):
         self._repository = repository
+        self._component_repo = component_repository
 
     async def create_cell(self, command: CreateCellCommand) -> Cell:
         if await self._repository.exists_by_name(command.name):
             raise ValueError(f"Cell '{command.name}' already exists")
-        cell = Cell(name=command.name, voltage=command.voltage, is_active=True)
+        cell = Cell(name=command.name, is_active=True)
         return await self._repository.save(cell)
 
     async def update_cell(self, command: UpdateCellCommand) -> Cell:
         cell = await self._get_or_raise(command.cell_id)
-        if command.name and command.name != cell.name:
-            if await self._repository.exists_by_name(command.name):
-                raise ValueError(f"Cell '{command.name}' already exists")
-        cell.update_info(name=command.name, voltage=command.voltage)
+        if command.name != cell.name and await self._repository.exists_by_name(command.name):
+            raise ValueError(f"Cell '{command.name}' already exists")
+        cell.update_info(name=command.name)
         return await self._repository.save(cell)
 
     async def disable_cell(self, command: DisableCellCommand) -> Cell:
         cell = await self._get_or_raise(command.cell_id)
+        assigned = await self._component_repo.find_all_components(cell_id=cell.id)
+        if assigned and not command.release_components:
+            raise ValueError(
+                "Cell has assigned cathodes/anodes; release them first or disable with release_components=true"
+            )
+        await self._component_repo.release_components_of_cell(cell.id)
         cell.disable()
+        # Same session: this commit persists the released components and the disabled cell atomically.
         return await self._repository.save(cell)
 
     async def _get_or_raise(self, cell_id: int) -> Cell:

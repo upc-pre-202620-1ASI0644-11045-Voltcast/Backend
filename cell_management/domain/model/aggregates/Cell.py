@@ -1,31 +1,24 @@
-from sqlalchemy import String, Float, Boolean
+from sqlalchemy import String, Boolean, SmallInteger, text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from shared.domain.model.aggregates.base_entity import BaseEntity
+from shared.infrastructure.persistence.configuration.database_configuration import Base
 
 
-class Cell(BaseEntity):
+class Cell(Base):
     """
     Aggregate Root: Celda electrica de la planta industrial.
     """
-    __tablename__ = "cells"
+    __tablename__ = "cell"
 
-    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
-    voltage: Mapped[float] = mapped_column(Float, nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    barcode_value: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("1"), nullable=False)
 
     def disable(self) -> None:
         if not self.is_active:
             raise ValueError("Cell is already disabled")
         self.is_active = False
 
-    def enable(self) -> None:
-        if self.is_active:
-            raise ValueError("Cell is already active")
-        self.is_active = True
-
-    def update_info(self, name: str | None = None, voltage: float | None = None) -> None:
-        if name is not None:
-            self.name = name
-        if voltage is not None:
-            self.voltage = voltage
+    def update_info(self, name: str) -> None:
+        self.name = name
