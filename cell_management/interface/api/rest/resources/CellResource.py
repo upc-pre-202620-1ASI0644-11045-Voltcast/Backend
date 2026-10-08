@@ -6,7 +6,7 @@ class CellRequest(BaseModel):
 
     model_config = {
         "json_schema_extra": {
-            "examples": [{"name": "Celda A1"}]
+            "examples": [{"name": "A1"}]
         }
     }
 

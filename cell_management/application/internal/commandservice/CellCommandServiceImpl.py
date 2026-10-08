@@ -17,16 +17,18 @@ class CellCommandServiceImpl:
         self._component_repo = component_repository
 
     async def create_cell(self, command: CreateCellCommand) -> Cell:
-        if await self._repository.exists_by_name(command.name):
-            raise ValueError(f"Cell '{command.name}' already exists")
-        cell = Cell(name=command.name, is_active=True)
+        name = Cell.normalize_name(command.name)
+        if await self._repository.exists_by_name(name):
+            raise ValueError(f"Cell '{name}' already exists")
+        cell = Cell(name=name, is_active=True)
         return await self._repository.save(cell)
 
     async def update_cell(self, command: UpdateCellCommand) -> Cell:
         cell = await self._get_or_raise(command.cell_id)
-        if command.name != cell.name and await self._repository.exists_by_name(command.name):
-            raise ValueError(f"Cell '{command.name}' already exists")
-        cell.update_info(name=command.name)
+        name = Cell.normalize_name(command.name)
+        if name != cell.name and await self._repository.exists_by_name(name):
+            raise ValueError(f"Cell '{name}' already exists")
+        cell.update_info(name=name)
         return await self._repository.save(cell)
 
     async def disable_cell(self, command: DisableCellCommand) -> Cell:
