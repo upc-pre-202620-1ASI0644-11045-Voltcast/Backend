@@ -16,3 +16,8 @@ class UpdateCellCommand:
 class DisableCellCommand:
     cell_id: int
     release_components: bool = False
+
+
+@dataclass(frozen=True)
+class GenerateCellBarcodeCommand:
+    cell_id: int

@@ -120,3 +120,25 @@ async def disable_cell(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+
+# =============================================================================
+# BARCODE
+# =============================================================================
+
+@router.post("/{cell_id}/barcode", response_model=CellResponse, summary="Generate cell barcode")
+async def generate_cell_barcode(
+    cell_id: int = Path(...),
+    _: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    try:
+        repository = CellRepositoryImpl(db)
+        service = CellCommandServiceImpl(repository, ComponentRepositoryImpl(db))
+        command = CellResourceAssembler.to_generate_barcode_command(cell_id)
+        cell = await service.generate_barcode(command)
+        return CellResourceAssembler.to_response(cell)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")

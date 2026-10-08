@@ -3,7 +3,9 @@ from cell_management.domain.model.commands.CellCommands import (
     CreateCellCommand,
     UpdateCellCommand,
     DisableCellCommand,
+    GenerateCellBarcodeCommand,
 )
+from cell_management.domain.model.aggregates.Component import ComponentType
 from cell_management.domain.repositories.CellRepository import CellRepository
 from cell_management.domain.repositories.ComponentRepository import ComponentRepository
 
@@ -37,6 +39,15 @@ class CellCommandServiceImpl:
         await self._component_repo.release_components_of_cell(cell.id)
         cell.disable()
         # Same session: this commit persists the released components and the disabled cell atomically.
+        return await self._repository.save(cell)
+
+    async def generate_barcode(self, command: GenerateCellBarcodeCommand) -> Cell:
+        cell = await self._get_or_raise(command.cell_id)
+        components = await self._component_repo.find_all_components(cell_id=cell.id, is_active=True)
+        assigned_types = {component.type for component in components}
+        if assigned_types != {int(ComponentType.CATHODE), int(ComponentType.ANODE)}:
+            raise ValueError("Cell must have an assigned cathode and anode to generate its barcode")
+        cell.generate_barcode()
         return await self._repository.save(cell)
 
     async def _get_or_raise(self, cell_id: int) -> Cell:

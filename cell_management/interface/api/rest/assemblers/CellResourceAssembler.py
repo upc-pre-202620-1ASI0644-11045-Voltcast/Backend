@@ -3,6 +3,7 @@ from cell_management.domain.model.commands.CellCommands import (
     CreateCellCommand,
     UpdateCellCommand,
     DisableCellCommand,
+    GenerateCellBarcodeCommand,
 )
 from cell_management.domain.model.queries.CellQueries import (
     GetCellByIdQuery,
@@ -28,6 +29,10 @@ class CellResourceAssembler:
     @staticmethod
     def to_disable_command(cell_id: int, release_components: bool = False) -> DisableCellCommand:
         return DisableCellCommand(cell_id=cell_id, release_components=release_components)
+
+    @staticmethod
+    def to_generate_barcode_command(cell_id: int) -> GenerateCellBarcodeCommand:
+        return GenerateCellBarcodeCommand(cell_id=cell_id)
 
     @staticmethod
     def to_get_by_id_query(cell_id: int) -> GetCellByIdQuery:
