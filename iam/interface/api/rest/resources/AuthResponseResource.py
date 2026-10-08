@@ -5,20 +5,11 @@ from pydantic import BaseModel
 
 class UserResponse(BaseModel):
     id: int
-    username: str
     email: str
-    full_name: str | None
-    is_active: bool
-    role: str
-    can_edit_profile: bool
-    can_change_password: bool
-    suspended_at: datetime | None
-    expires_at: datetime | None
-    days_until_deletion: int | None
+    full_name: str
+    role: str | None
+    status: str
     created_at: datetime
-    updated_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
 class AuthenticationResponse(BaseModel):
@@ -31,3 +22,7 @@ class AuthenticationResponse(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "Bearer"
+
+
+class MessageResponse(BaseModel):
+    message: str

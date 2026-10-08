@@ -28,7 +28,7 @@ class JWTService:
         self.access_token_expire_minutes = 30  # 30 minutes
         self.refresh_token_expire_days = 7  # 7 days
 
-    def create_access_token(self, user_id: int, username: str, email: str, role: str) -> str:
+    def create_access_token(self, user_id: int, email: str, role: str) -> str:
         """
         Create JWT access token
         """
@@ -36,7 +36,6 @@ class JWTService:
 
         payload = {
             "sub": str(user_id),  # Subject (user_id)
-            "username": username,
             "email": email,
             "type": "access",
             "role": role,
@@ -73,11 +72,13 @@ class JWTService:
         except InvalidTokenError as e:
             raise ValueError(f"Invalid token: {str(e)}")
 
-    def get_user_id_from_token(self, token: str) -> int:
+    def get_user_id_from_token(self, token: str, expected_type: str = "access") -> int:
         """
-        Extract user_id from token
+        Extract user_id from token, rejecting tokens of another type (access vs refresh)
         """
         payload = self.decode_token(token)
+        if payload.get("type") != expected_type:
+            raise ValueError(f"Invalid token: expected a {expected_type} token")
         return int(payload["sub"])
 
     def get_role_from_token(self, token: str) -> str:
