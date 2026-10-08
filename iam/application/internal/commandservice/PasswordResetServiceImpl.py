@@ -1,6 +1,5 @@
-import bcrypt
-
 from iam.domain.model.aggregates.PasswordReset import PasswordReset
+from iam.domain.model.aggregates.User import User
 from iam.domain.model.commands.PasswordResetCommands import (
     RequestPasswordResetCommand,
     ConfirmPasswordResetCommand,
@@ -8,6 +7,8 @@ from iam.domain.model.commands.PasswordResetCommands import (
 from iam.domain.repositories.PasswordResetRepository import PasswordResetRepository
 from iam.domain.repositories.UserRepository import UserRepository
 from shared.infrastructure.email.email_client import send_verification_code
+
+INVALID_CODE_MESSAGE = "Invalid or expired verification code"
 
 
 class PasswordResetServiceImpl:
@@ -22,31 +23,30 @@ class PasswordResetServiceImpl:
 
     async def request_reset(self, command: RequestPasswordResetCommand) -> None:
         user = await self._user_repo.find_by_email(command.email.lower().strip())
-        if not user:
-            # No revelar si el email existe
+        if not user or not user.can_authenticate():
+            # Do not reveal whether the email is registered
             return
 
-        # Invalidar codigos anteriores
-        await self._password_reset_repo.invalidate_all_for_user(user.id)
-
-        code = PasswordReset.generate_code()
-        entry = PasswordReset(user_id=user.id, code=code)
-        await self._password_reset_repo.create(entry)
-
-        await send_verification_code(user.email, code)
+        # One row per user: a new request replaces the previous code (expired or not)
+        entry = await self._password_reset_repo.find_by_user(user.id)
+        if entry:
+            entry.renew()
+        else:
+            entry = PasswordReset.issue_for(user.id)
+        entry = await self._password_reset_repo.save(entry)
+        await send_verification_code(user.email, entry.code)
 
     async def confirm_reset(self, command: ConfirmPasswordResetCommand) -> None:
         user = await self._user_repo.find_by_email(command.email.lower().strip())
-        if not user:
-            raise ValueError("Email no encontrado")
+        if not user or not user.can_authenticate():
+            raise ValueError(INVALID_CODE_MESSAGE)
 
-        entry = await self._password_reset_repo.find_latest_active(user.id)
+        entry = await self._password_reset_repo.find_by_user(user.id)
         if not entry or not entry.is_valid(command.code):
-            raise ValueError("Codigo invalido o expirado")
+            raise ValueError(INVALID_CODE_MESSAGE)
 
-        salt = bcrypt.gensalt()
-        user.hashed_password = bcrypt.hashpw(command.new_password.encode("utf-8"), salt).decode("utf-8")
+        User.validate_password_policy(command.new_password)
+        user.reset_password(command.new_password)
+        entry.mark_used()
+        # Same session: one commit saves the new password and consumes the code atomically
         await self._user_repo.save(user)
-
-        entry.used = True
-        await self._password_reset_repo.invalidate_all_for_user(user.id)

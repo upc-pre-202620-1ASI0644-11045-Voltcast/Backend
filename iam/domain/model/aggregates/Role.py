@@ -1,13 +1,11 @@
-from datetime import datetime, timezone
-
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
 
+from shared.infrastructure.persistence.configuration.column_types import TinyInt
 from shared.infrastructure.persistence.configuration.database_configuration import Base
 
-
-def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+ROLE_ADMIN = "ADMIN"  # Supervisor
+ROLE_USER = "USER"    # Ingeniero de Planta
 
 
 class Role(Base):
@@ -15,9 +13,7 @@ class Role(Base):
     Catálogo de roles del sistema.
     ADMIN (Supervisor), USER (Ingeniero de Planta).
     """
-    __tablename__ = "roles"
+    __tablename__ = "role"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
-    description: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=utc_now)
+    id: Mapped[int] = mapped_column(TinyInt, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(20), nullable=False)
