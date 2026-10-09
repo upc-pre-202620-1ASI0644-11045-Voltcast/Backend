@@ -1,9 +1,9 @@
 from enum import IntEnum
 
-from sqlalchemy import String, Boolean, SmallInteger, ForeignKey, text
-from sqlalchemy.dialects.mysql import TINYINT
+from sqlalchemy import String, Boolean, ForeignKey, text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from shared.infrastructure.persistence.configuration.column_types import SmallInt, TinyInt1
 from shared.infrastructure.persistence.configuration.database_configuration import Base
 
 
@@ -18,11 +18,11 @@ class Component(Base):
     """
     __tablename__ = "component"
 
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, autoincrement=True)
-    type: Mapped[int] = mapped_column(TINYINT(1), nullable=False)  # ComponentType: 0 = cátodo, 1 = ánodo
+    id: Mapped[int] = mapped_column(SmallInt, primary_key=True, autoincrement=True)
+    type: Mapped[int] = mapped_column(TinyInt1, nullable=False)  # ComponentType: 0 = cátodo, 1 = ánodo
     serial_code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("1"), nullable=False)
-    cell_id: Mapped[int | None] = mapped_column(SmallInteger, ForeignKey("cell.id"), nullable=True)
+    cell_id: Mapped[int | None] = mapped_column(SmallInt, ForeignKey("cell.id"), nullable=True)
 
     def assign_to(self, cell_id: int) -> None:
         if not self.is_active:

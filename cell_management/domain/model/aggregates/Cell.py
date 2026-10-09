@@ -1,8 +1,9 @@
 import re
 
-from sqlalchemy import String, Boolean, SmallInteger, text
+from sqlalchemy import String, Boolean, text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from shared.infrastructure.persistence.configuration.column_types import SmallInt
 from shared.infrastructure.persistence.configuration.database_configuration import Base
 
 
@@ -15,7 +16,7 @@ class Cell(Base):
     """
     __tablename__ = "cell"
 
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(SmallInt, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     barcode_value: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("1"), nullable=False)
