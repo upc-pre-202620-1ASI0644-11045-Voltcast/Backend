@@ -3,6 +3,8 @@ from cell_management.domain.model.commands.ComponentCommands import (
     CreateComponentCommand,
     UpdateComponentCommand,
     DisableComponentCommand,
+    ReactivateComponentCommand,
+    HideComponentCommand,
     AssignComponentCommand,
     SwapComponentsCommand,
 )
@@ -21,17 +23,26 @@ class ComponentCommandServiceImpl:
         self._cell_repo = cell_repository
 
     async def create_component(self, command: CreateComponentCommand) -> Component:
-        if await self._component_repo.exists_by_serial_code(command.serial_code):
+        existing = await self._component_repo.find_by_serial_code(command.serial_code)
+        if existing and existing.is_active and existing.is_visible:
             raise ValueError(f"Component with serial code '{command.serial_code}' already exists")
         if command.cell_id is not None:
-            await self._get_active_cell_or_raise(command.cell_id)
-        component = Component(
-            type=int(command.type),
-            serial_code=command.serial_code,
-            is_active=True,
-            cell_id=command.cell_id,
-        )
-        return await self._component_repo.save_component(component)
+            await self._get_visible_cell_or_raise(command.cell_id)
+        if existing:
+            # Disabled or removed from view: the same component comes back instead of a duplicate.
+            existing.revive(command.type, command.cell_id)
+            component = existing
+        else:
+            component = Component(
+                type=int(command.type),
+                serial_code=command.serial_code,
+                is_active=True,
+                is_visible=True,
+                cell_id=command.cell_id,
+            )
+        saved = await self._component_repo.save_component(component)
+        await self._refresh_cells(saved.cell_id)
+        return saved
 
     async def update_component(self, command: UpdateComponentCommand) -> Component:
         component = await self._get_or_raise(command.component_id)
@@ -42,18 +53,34 @@ class ComponentCommandServiceImpl:
         ):
             raise ValueError(f"Component with serial code '{command.serial_code}' already exists")
         component.update_info(serial_code=command.serial_code, component_type=command.type)
-        return await self._component_repo.save_component(component)
+        saved = await self._component_repo.save_component(component)
+        # A new type can complete or break the pair of its cell.
+        await self._refresh_cells(saved.cell_id)
+        return saved
 
     async def disable_component(self, command: DisableComponentCommand) -> Component:
         component = await self._get_or_raise(command.component_id)
         component.disable()
         return await self._component_repo.save_component(component)
 
+    async def reactivate_component(self, command: ReactivateComponentCommand) -> Component:
+        component = await self._get_or_raise(command.component_id)
+        component.reactivate()
+        return await self._component_repo.save_component(component)
+
+    async def hide_component(self, command: HideComponentCommand) -> Component:
+        component = await self._get_or_raise(command.component_id)
+        component.hide()
+        return await self._component_repo.save_component(component)
+
     async def assign_component(self, command: AssignComponentCommand) -> Component:
         component = await self._get_or_raise(command.component_id)
-        await self._get_active_cell_or_raise(command.cell_id)
+        await self._get_visible_cell_or_raise(command.cell_id)
+        previous_cell_id = component.cell_id
         component.assign_to(command.cell_id)
-        return await self._component_repo.save_component(component)
+        saved = await self._component_repo.save_component(component)
+        await self._refresh_cells(previous_cell_id, command.cell_id)
+        return saved
 
     async def swap_components(self, command: SwapComponentsCommand) -> tuple[Component, Component]:
         comp_a = await self._get_or_raise(command.component_a_id)
@@ -72,14 +99,23 @@ class ComponentCommandServiceImpl:
 
         # Both components are tracked by the same session: a single commit persists the swap atomically.
         saved_a = await self._component_repo.save_component(comp_a)
+        await self._refresh_cells(cell_a_id, cell_b_id)
         return saved_a, comp_b
 
-    async def _get_active_cell_or_raise(self, cell_id: int):
+    async def _refresh_cells(self, *cell_ids: int | None) -> None:
+        """Recomputes the status of the given cells from the components they now have."""
+        for cell_id in {cell_id for cell_id in cell_ids if cell_id is not None}:
+            cell = await self._cell_repo.find_by_id(cell_id)
+            if cell:
+                assigned = await self._component_repo.find_all_components(cell_id=cell_id, is_active=True)
+                cell.refresh_status({component.type for component in assigned})
+                await self._cell_repo.save(cell)
+
+    async def _get_visible_cell_or_raise(self, cell_id: int):
+        """Any cell can receive components (that is what activates it), except one removed from view."""
         cell = await self._cell_repo.find_by_id(cell_id)
-        if not cell:
+        if not cell or not cell.is_visible:
             raise ValueError(f"Cell not found: {cell_id}")
-        if not cell.is_active:
-            raise ValueError(f"Cell is disabled: {cell_id}")
         return cell
 
     async def _get_or_raise(self, component_id: int) -> Component:

@@ -3,6 +3,8 @@ from cell_management.domain.model.commands.ComponentCommands import (
     CreateComponentCommand,
     UpdateComponentCommand,
     DisableComponentCommand,
+    ReactivateComponentCommand,
+    HideComponentCommand,
     AssignComponentCommand,
     SwapComponentsCommand,
 )
@@ -40,6 +42,14 @@ class ComponentResourceAssembler:
     @staticmethod
     def to_disable_command(component_id: int) -> DisableComponentCommand:
         return DisableComponentCommand(component_id=component_id)
+
+    @staticmethod
+    def to_reactivate_command(component_id: int) -> ReactivateComponentCommand:
+        return ReactivateComponentCommand(component_id=component_id)
+
+    @staticmethod
+    def to_hide_command(component_id: int) -> HideComponentCommand:
+        return HideComponentCommand(component_id=component_id)
 
     @staticmethod
     def to_assign_command(component_id: int, request: ComponentAssignRequest) -> AssignComponentCommand:

@@ -26,9 +26,12 @@ class ComponentRepositoryImpl:
         component_type: ComponentType | None = None,
         cell_id: int | None = None,
         is_active: bool | None = None,
+        visible_only: bool = True,
     ) -> list[Component]:
         stmt = select(Component)
         filters = []
+        if visible_only:
+            filters.append(Component.is_visible.is_(True))
         if component_type is not None:
             filters.append(Component.type == int(component_type))
         if cell_id is not None:
@@ -40,6 +43,10 @@ class ComponentRepositoryImpl:
         stmt = stmt.order_by(Component.id.desc())
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
+
+    async def find_by_serial_code(self, serial_code: str) -> Component | None:
+        result = await self._session.execute(select(Component).where(Component.serial_code == serial_code))
+        return result.scalar_one_or_none()
 
     async def exists_by_serial_code(self, serial_code: str) -> bool:
         result = await self._session.execute(

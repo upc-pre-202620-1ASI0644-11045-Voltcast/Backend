@@ -2,7 +2,8 @@ from cell_management.domain.model.aggregates.Cell import Cell
 from cell_management.domain.model.commands.CellCommands import (
     CreateCellCommand,
     UpdateCellCommand,
-    DisableCellCommand,
+    ReleaseCellComponentsCommand,
+    HideCellCommand,
     GenerateCellBarcodeCommand,
 )
 from cell_management.domain.model.aggregates.Component import ComponentType
@@ -18,10 +19,14 @@ class CellCommandServiceImpl:
 
     async def create_cell(self, command: CreateCellCommand) -> Cell:
         name = Cell.normalize_name(command.name)
-        if await self._repository.exists_by_name(name):
-            raise ValueError(f"Cell '{name}' already exists")
-        cell = Cell(name=name, is_active=True)
-        return await self._repository.save(cell)
+        existing = await self._repository.find_by_name(name)
+        if existing:
+            if existing.is_visible:
+                raise ValueError(f"Cell '{name}' already exists")
+            # Removed from view earlier: the same cell comes back (inactive, it has no components).
+            existing.show()
+            return await self._repository.save(existing)
+        return await self._repository.save(Cell(name=name, is_active=False, is_visible=True))
 
     async def update_cell(self, command: UpdateCellCommand) -> Cell:
         cell = await self._get_or_raise(command.cell_id)
@@ -31,16 +36,20 @@ class CellCommandServiceImpl:
         cell.update_info(name=name)
         return await self._repository.save(cell)
 
-    async def disable_cell(self, command: DisableCellCommand) -> Cell:
+    async def release_components(self, command: ReleaseCellComponentsCommand) -> Cell:
+        """Frees the cell's cathode and anode; without them the cell is inactive."""
         cell = await self._get_or_raise(command.cell_id)
-        assigned = await self._component_repo.find_all_components(cell_id=cell.id)
-        if assigned and not command.release_components:
-            raise ValueError(
-                "Cell has assigned cathodes/anodes; release them first or disable with release_components=true"
-            )
         await self._component_repo.release_components_of_cell(cell.id)
-        cell.disable()
-        # Same session: this commit persists the released components and the disabled cell atomically.
+        cell.refresh_status(set())
+        # Same session: this commit persists the released components and the cell status atomically.
+        return await self._repository.save(cell)
+
+    async def hide_cell(self, command: HideCellCommand) -> Cell:
+        """Removes the cell from view. Its components have to be released first."""
+        cell = await self._get_or_raise(command.cell_id)
+        if await self._component_repo.find_all_components(cell_id=cell.id):
+            raise ValueError("Cell has assigned cathodes/anodes; release them before removing it")
+        cell.hide()
         return await self._repository.save(cell)
 
     async def generate_barcode(self, command: GenerateCellBarcodeCommand) -> Cell:

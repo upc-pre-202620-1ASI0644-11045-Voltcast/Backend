@@ -5,13 +5,14 @@ from fastapi import FastAPI
 from sqlalchemy import select
 
 from shared.infrastructure.cache.redis_client import close_redis
-from shared.infrastructure.persistence.configuration.database_configuration import init_db, close_db, AsyncSessionLocal
+from shared.infrastructure.persistence.configuration.database_configuration import init_db, close_db, AsyncSessionLocal, engine
 from iam.domain.model.aggregates.Role import Role, ROLE_ADMIN, ROLE_USER
 from iam.domain.model.aggregates.User import User, UserStatus
 from iam.interface.api.rest.controllers.AuthController import router as auth_router
 from iam.interface.api.rest.controllers.UserController import router as user_router
 from cell_management.interface.api.rest.controllers.CellController import router as cell_router
 from cell_management.interface.api.rest.controllers.ComponentController import router as component_router
+from cell_management.infrastructure.persistence.schema_sync import sync_cell_management_schema
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,8 @@ async def seed_supervisor():
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await init_db()
+    async with engine.begin() as connection:
+        await sync_cell_management_schema(connection)
     await seed_roles()
     await seed_supervisor()
     yield

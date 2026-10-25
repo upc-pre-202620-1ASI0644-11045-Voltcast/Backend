@@ -161,6 +161,44 @@ async def disable_component(
 
 
 # =============================================================================
+# REACTIVATE / HIDE
+# =============================================================================
+
+@router.patch("/{component_id}/reactivate", response_model=ComponentResponse, summary="Reactivate a disabled component")
+async def reactivate_component(
+    component_id: int = Path(...),
+    _: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """A disabled component becomes free again."""
+    try:
+        service = ComponentCommandServiceImpl(ComponentRepositoryImpl(db), CellRepositoryImpl(db))
+        component = await service.reactivate_component(ComponentResourceAssembler.to_reactivate_command(component_id))
+        return ComponentResourceAssembler.to_response(component)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+
+@router.patch("/{component_id}/hide", response_model=ComponentResponse, summary="Remove a disabled component from view")
+async def hide_component(
+    component_id: int = Path(...),
+    _: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Hides a disabled component. Registering its serial code again brings it back."""
+    try:
+        service = ComponentCommandServiceImpl(ComponentRepositoryImpl(db), CellRepositoryImpl(db))
+        component = await service.hide_component(ComponentResourceAssembler.to_hide_command(component_id))
+        return ComponentResourceAssembler.to_response(component)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+
+# =============================================================================
 # ASSIGN
 # =============================================================================
 
