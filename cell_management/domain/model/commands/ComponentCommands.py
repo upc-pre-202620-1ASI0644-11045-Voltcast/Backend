@@ -23,6 +23,16 @@ class DisableComponentCommand:
 
 
 @dataclass(frozen=True)
+class ReactivateComponentCommand:
+    component_id: int
+
+
+@dataclass(frozen=True)
+class HideComponentCommand:
+    component_id: int
+
+
+@dataclass(frozen=True)
 class AssignComponentCommand:
     component_id: int
     cell_id: int

@@ -30,16 +30,16 @@ class TestRegisterComponent:  # US012
         response = client.post(COMPONENTS, headers=engineer_headers, json={"type": "ANODE", "serial_code": "CAT-1"})
         assert response.status_code == 400 and "already exists" in response.json()["detail"]
 
-    def test_rejects_an_unknown_or_disabled_cell(self, client, engineer_headers):
+    def test_rejects_an_unknown_or_hidden_cell(self, client, engineer_headers):
         unknown = client.post(COMPONENTS, headers=engineer_headers, json={"type": "ANODE", "serial_code": "A-1", "cell_id": 99})
         assert unknown.status_code == 400
 
         cell = create_cell(client, engineer_headers)
-        client.patch(f"{CELLS}/{cell['id']}/disable", headers=engineer_headers)
-        disabled = client.post(
+        client.patch(f"{CELLS}/{cell['id']}/hide", headers=engineer_headers)
+        hidden = client.post(
             COMPONENTS, headers=engineer_headers, json={"type": "ANODE", "serial_code": "A-2", "cell_id": cell["id"]}
         )
-        assert disabled.status_code == 400 and "disabled" in disabled.json()["detail"]
+        assert hidden.status_code == 400 and "not found" in hidden.json()["detail"]
 
     def test_requires_authentication(self, client):
         assert client.post(COMPONENTS, json={"type": "ANODE", "serial_code": "A-1"}).status_code in (401, 403)
@@ -113,7 +113,7 @@ class TestDisableComponent:  # US013
     def test_can_be_disabled_after_being_released_from_its_cell(self, client, engineer_headers):
         cell = create_cell(client, engineer_headers)
         component = create_component(client, engineer_headers, cell_id=cell["id"])
-        client.patch(f"{CELLS}/{cell['id']}/disable?release_components=true", headers=engineer_headers)
+        client.patch(f"{CELLS}/{cell['id']}/release", headers=engineer_headers)
         assert client.patch(f"{COMPONENTS}/{component['id']}/disable", headers=engineer_headers).status_code == 200
 
     def test_a_disabled_component_cannot_be_assigned(self, client, engineer_headers):
@@ -131,12 +131,12 @@ class TestAssignComponent:
         response = client.post(f"{COMPONENTS}/{component['id']}/assign", headers=engineer_headers, json={"cell_id": cell["id"]})
         assert response.status_code == 200 and response.json()["cell_id"] == cell["id"]
 
-    def test_rejects_an_unknown_or_disabled_cell(self, client, engineer_headers):
+    def test_rejects_an_unknown_or_hidden_cell(self, client, engineer_headers):
         component = create_component(client, engineer_headers)
         assert client.post(f"{COMPONENTS}/{component['id']}/assign", headers=engineer_headers, json={"cell_id": 99}).status_code == 400
 
         cell = create_cell(client, engineer_headers)
-        client.patch(f"{CELLS}/{cell['id']}/disable", headers=engineer_headers)
+        client.patch(f"{CELLS}/{cell['id']}/hide", headers=engineer_headers)
         response = client.post(f"{COMPONENTS}/{component['id']}/assign", headers=engineer_headers, json={"cell_id": cell["id"]})
         assert response.status_code == 400
 
@@ -184,3 +184,47 @@ class TestSwapComponents:  # US014
         cell = create_cell(client, engineer_headers)
         component = create_component(client, engineer_headers, "CATHODE", "CAT-A", cell["id"])
         assert self.swap(client, engineer_headers, component["id"], 99).status_code == 400
+
+
+class TestReactivateAndHideComponent:
+    def disabled(self, client, headers, serial="CAT-1", type_="CATHODE"):
+        component = create_component(client, headers, type_, serial)
+        client.patch(f"{COMPONENTS}/{component['id']}/disable", headers=headers)
+        return component
+
+    def test_reactivating_a_disabled_component_makes_it_free(self, client, engineer_headers):
+        component = self.disabled(client, engineer_headers)
+        response = client.patch(f"{COMPONENTS}/{component['id']}/reactivate", headers=engineer_headers)
+        assert response.status_code == 200
+        assert (response.json()["is_active"], response.json()["cell_id"]) == (True, None)
+
+    def test_an_active_component_cannot_be_reactivated_or_hidden(self, client, engineer_headers):
+        component = create_component(client, engineer_headers)
+        assert client.patch(f"{COMPONENTS}/{component['id']}/reactivate", headers=engineer_headers).status_code == 400
+        assert client.patch(f"{COMPONENTS}/{component['id']}/hide", headers=engineer_headers).status_code == 400
+
+    def test_hiding_a_disabled_component_removes_it_from_the_list(self, client, engineer_headers):
+        component = self.disabled(client, engineer_headers)
+        assert client.patch(f"{COMPONENTS}/{component['id']}/hide", headers=engineer_headers).status_code == 200
+        assert client.get(COMPONENTS, headers=engineer_headers).json() == []
+        assert client.get(f"{COMPONENTS}/{component['id']}", headers=engineer_headers).status_code == 200
+
+    def test_registering_a_hidden_serial_code_brings_that_component_back(self, client, engineer_headers):
+        component = self.disabled(client, engineer_headers, "C-001")
+        client.patch(f"{COMPONENTS}/{component['id']}/hide", headers=engineer_headers)
+        cell = create_cell(client, engineer_headers)
+
+        response = client.post(
+            COMPONENTS, headers=engineer_headers, json={"type": "ANODE", "serial_code": "C-001", "cell_id": cell["id"]}
+        )
+        assert response.status_code == 201
+        assert response.json() == {
+            "id": component["id"], "type": "ANODE", "serial_code": "C-001", "is_active": True, "cell_id": cell["id"],
+        }
+        assert len(client.get(COMPONENTS, headers=engineer_headers).json()) == 1
+
+    def test_registering_a_disabled_serial_code_reactivates_it(self, client, engineer_headers):
+        component = self.disabled(client, engineer_headers, "C-002")
+        response = client.post(COMPONENTS, headers=engineer_headers, json={"type": "CATHODE", "serial_code": "C-002"})
+        assert response.status_code == 201
+        assert (response.json()["id"], response.json()["is_active"]) == (component["id"], True)

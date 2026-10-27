@@ -100,21 +100,38 @@ async def update_cell(
 
 
 # =============================================================================
-# DISABLE
+# RELEASE / HIDE
 # =============================================================================
 
-@router.patch("/{cell_id}/disable", response_model=CellResponse, summary="Disable cell")
-async def disable_cell(
+@router.patch("/{cell_id}/release", response_model=CellResponse, summary="Release the cell's cathode and anode")
+async def release_cell_components(
     cell_id: int = Path(...),
-    release_components: bool = Query(False, description="Release assigned cathodes/anodes before disabling"),
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Frees the assigned cathode and anode; the cell becomes inactive until it gets both again."""
     try:
         repository = CellRepositoryImpl(db)
         service = CellCommandServiceImpl(repository, ComponentRepositoryImpl(db))
-        command = CellResourceAssembler.to_disable_command(cell_id, release_components)
-        cell = await service.disable_cell(command)
+        cell = await service.release_components(CellResourceAssembler.to_release_command(cell_id))
+        return CellResourceAssembler.to_response(cell)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+
+@router.patch("/{cell_id}/hide", response_model=CellResponse, summary="Remove a cell from view")
+async def hide_cell(
+    cell_id: int = Path(...),
+    _: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Hides a cell without components. Creating a cell with the same name brings it back."""
+    try:
+        repository = CellRepositoryImpl(db)
+        service = CellCommandServiceImpl(repository, ComponentRepositoryImpl(db))
+        cell = await service.hide_cell(CellResourceAssembler.to_hide_command(cell_id))
         return CellResourceAssembler.to_response(cell)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

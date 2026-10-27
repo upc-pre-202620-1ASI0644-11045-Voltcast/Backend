@@ -2,7 +2,8 @@ from cell_management.domain.model.aggregates.Cell import Cell
 from cell_management.domain.model.commands.CellCommands import (
     CreateCellCommand,
     UpdateCellCommand,
-    DisableCellCommand,
+    ReleaseCellComponentsCommand,
+    HideCellCommand,
     GenerateCellBarcodeCommand,
 )
 from cell_management.domain.model.queries.CellQueries import (
@@ -27,8 +28,12 @@ class CellResourceAssembler:
         return UpdateCellCommand(cell_id=cell_id, name=request.name)
 
     @staticmethod
-    def to_disable_command(cell_id: int, release_components: bool = False) -> DisableCellCommand:
-        return DisableCellCommand(cell_id=cell_id, release_components=release_components)
+    def to_release_command(cell_id: int) -> ReleaseCellComponentsCommand:
+        return ReleaseCellComponentsCommand(cell_id=cell_id)
+
+    @staticmethod
+    def to_hide_command(cell_id: int) -> HideCellCommand:
+        return HideCellCommand(cell_id=cell_id)
 
     @staticmethod
     def to_generate_barcode_command(cell_id: int) -> GenerateCellBarcodeCommand:

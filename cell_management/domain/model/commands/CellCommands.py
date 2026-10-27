@@ -13,9 +13,13 @@ class UpdateCellCommand:
 
 
 @dataclass(frozen=True)
-class DisableCellCommand:
+class ReleaseCellComponentsCommand:
     cell_id: int
-    release_components: bool = False
+
+
+@dataclass(frozen=True)
+class HideCellCommand:
+    cell_id: int
 
 
 @dataclass(frozen=True)
