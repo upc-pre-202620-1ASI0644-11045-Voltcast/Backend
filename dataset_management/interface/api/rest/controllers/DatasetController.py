@@ -25,7 +25,7 @@ async def list_datasets(
     db: AsyncSession = Depends(get_db_session),
 ):
     try:
-        service = DatasetQueryServiceImpl(DatasetRepositoryImpl(db))
+        service = DatasetQueryServiceImpl(DatasetRepositoryImpl(db), get_file_storage())
         datasets = await service.get_all_datasets(DatasetResourceAssembler.to_get_all_query())
         return [DatasetResourceAssembler.to_response(d) for d in datasets]
     except Exception as e:
@@ -39,11 +39,11 @@ async def get_dataset(
     db: AsyncSession = Depends(get_db_session),
 ):
     try:
-        service = DatasetQueryServiceImpl(DatasetRepositoryImpl(db))
+        service = DatasetQueryServiceImpl(DatasetRepositoryImpl(db), get_file_storage())
         dataset = await service.get_dataset_by_id(DatasetResourceAssembler.to_get_by_id_query(dataset_id))
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset not found")
-        return DatasetResourceAssembler.to_response(dataset)
+        return DatasetResourceAssembler.to_response(dataset, await service.get_summary(dataset))
     except HTTPException:
         raise
     except Exception as e:

@@ -1,8 +1,6 @@
 from datetime import datetime
 from math import isclose, sqrt
 
-import pytest
-
 from dataset_management.domain.model.aggregates.UploadedDataset import DatasetStatus, UploadedDataset
 from shared.infrastructure.persistence.configuration.database_configuration import AsyncSessionLocal
 from shared.infrastructure.queue.task_queue import TRAINING_QUEUE, get_task_queue
@@ -16,11 +14,6 @@ from voltage_forecasting.domain.model.aggregates.TrainingExecution import Traini
 FORECASTS = f"{API}/forecasts"
 TRAININGS = f"{API}/trainings"
 ALERT_RULES = f"{API}/alert-rules"
-
-
-@pytest.fixture(autouse=True)
-def empty_queue():
-    get_task_queue().messages.clear()
 
 
 def seed(client, *rows):
@@ -152,7 +145,7 @@ class TestRequestTraining:  # US005
         assert response.status_code == 202
         body = response.json()
         assert (body["status"], body["dataset_id"], body["finished_at"]) == ("running", dataset, None)
-        assert get_task_queue().messages == [(TRAINING_QUEUE, {"task": "training", "training_execution_id": body["id"]})]
+        assert get_task_queue().pending(TRAINING_QUEUE) == [{"task": "training", "training_execution_id": body["id"]}]
         assert client.get(f"{TRAININGS}/{body['id']}", headers=engineer_headers).json()["status"] == "running"
         # The new version is not served until the Job activates it.
         assert client.get(FORECASTS, headers=engineer_headers).json()["model"] is None

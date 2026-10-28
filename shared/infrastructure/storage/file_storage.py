@@ -5,8 +5,9 @@ from pathlib import Path
 
 class LocalFileStorage:
     """
-    Stores the uploaded files on the local disk. shortcut: local disk only, it does not survive a
-    container restart or reach the Job; the Azure Blob Storage implementation replaces it in the cloud setup.
+    Stores the files on the local disk, in a folder shared by the API and the worker.
+    shortcut: local disk only, it does not survive a container restart or reach the Job in Azure; the Azure Blob
+    Storage implementation replaces it in the cloud setup.
     """
 
     def __init__(self, root: Path):
@@ -21,6 +22,9 @@ class LocalFileStorage:
 
         await asyncio.to_thread(write)
         return path
+
+    async def read(self, path: str) -> bytes:
+        return await asyncio.to_thread((self._root / path).read_bytes)
 
 
 def get_file_storage() -> LocalFileStorage:

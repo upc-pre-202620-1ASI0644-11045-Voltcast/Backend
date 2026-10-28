@@ -1,29 +1,53 @@
-import logging
-
-logger = logging.getLogger(__name__)
+import asyncio
+import json
+import os
+import time
+from pathlib import Path
+from uuid import uuid4
 
 # Azure Storage Queue names: lowercase letters, numbers and hyphens only.
 ETL_QUEUE = "etl-tasks"
 TRAINING_QUEUE = "training-tasks"
 
 
-class InMemoryTaskQueue:
+class LocalTaskQueue:
     """
-    Keeps the messages in memory so the API can be developed and tested without Azure.
-    shortcut: the messages are lost when the process restarts and no Job consumes them; the Azure Storage Queue
-    implementation replaces it in the cloud setup.
+    One JSON file per message in a folder shared by the API and the worker, so both can run as separate
+    processes without Azure. A received message stays in the folder until it is deleted, so a worker that
+    dies halfway finds it again (at-least-once, like an Azure Storage Queue).
+    shortcut: a single worker, two workers could take the same message; the Azure Storage Queue implementation
+    replaces it in the cloud setup.
     """
 
-    def __init__(self):
-        self.messages: list[tuple[str, dict]] = []
+    def __init__(self, root: Path):
+        self._root = root
 
     async def send(self, queue: str, message: dict) -> None:
-        self.messages.append((queue, message))
-        logger.info("Task queued in memory: %s %s", queue, message)
+        def write() -> None:
+            folder = self._root / queue
+            folder.mkdir(parents=True, exist_ok=True)
+            name = f"{time.time_ns():020d}-{uuid4().hex}"
+            (folder / f"{name}.tmp").write_text(json.dumps(message), encoding="utf-8")
+            (folder / f"{name}.tmp").rename(folder / f"{name}.json")  # the worker never sees a half-written message
+
+        await asyncio.to_thread(write)
+
+    async def receive(self, queue: str) -> tuple[dict, Path] | None:
+        """The oldest message and the handle to delete it once it has been handled, or None when the queue is empty."""
+        def read() -> tuple[dict, Path] | None:
+            for path in sorted((self._root / queue).glob("*.json")):
+                return json.loads(path.read_text(encoding="utf-8")), path
+            return None
+
+        return await asyncio.to_thread(read)
+
+    async def delete(self, handle: Path) -> None:
+        await asyncio.to_thread(handle.unlink, True)
+
+    def pending(self, queue: str) -> list[dict]:
+        """Messages waiting in the queue, oldest first."""
+        return [json.loads(p.read_text(encoding="utf-8")) for p in sorted((self._root / queue).glob("*.json"))]
 
 
-_queue = InMemoryTaskQueue()
-
-
-def get_task_queue() -> InMemoryTaskQueue:
-    return _queue
+def get_task_queue() -> LocalTaskQueue:
+    return LocalTaskQueue(Path(os.getenv("LOCAL_STORAGE_DIR", "storage")) / "queues")

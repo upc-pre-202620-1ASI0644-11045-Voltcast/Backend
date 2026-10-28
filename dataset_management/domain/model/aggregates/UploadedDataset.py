@@ -59,6 +59,16 @@ class UploadedDataset(Base):
             raise ValueError(f"The file exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit")
         return name
 
+    def start_cleaning(self) -> None:
+        self.upload_status = DatasetStatus.CLEANING
+        self.error_message = None
+
+    def mark_ready(self, processed_path: str, row_count: int, processed_row_count: int) -> None:
+        self.upload_status = DatasetStatus.READY
+        self.processed_path = processed_path
+        self.row_count = row_count
+        self.processed_row_count = processed_row_count
+
     def mark_failed(self, message: str) -> None:
         self.upload_status = DatasetStatus.FAILED
         self.error_message = message

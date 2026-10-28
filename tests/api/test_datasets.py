@@ -1,18 +1,11 @@
 import os
 from pathlib import Path
 
-import pytest
-
 from shared.infrastructure.queue.task_queue import ETL_QUEUE, get_task_queue
 from tests.conftest import API
 
 DATASETS = f"{API}/datasets"
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-
-
-@pytest.fixture(autouse=True)
-def empty_queue():
-    get_task_queue().messages.clear()
 
 
 def upload(client, headers, name="voltages.xlsx", content=b"excel-bytes"):
@@ -25,7 +18,7 @@ class TestUploadDataset:  # US001
         assert response.status_code == 201
         body = response.json()
         assert (body["filename"], body["upload_status"], body["row_count"]) == ("voltages.xlsx", "raw", 0)
-        assert get_task_queue().messages == [(ETL_QUEUE, {"task": "etl", "dataset_id": body["id"]})]
+        assert get_task_queue().pending(ETL_QUEUE) == [{"task": "etl", "dataset_id": body["id"]}]
         stored = list((Path(os.environ["LOCAL_STORAGE_DIR"]) / "raw").glob("*.xlsx"))
         assert [f.read_bytes() for f in stored] == [b"excel-bytes"]
 
@@ -34,7 +27,7 @@ class TestUploadDataset:  # US001
             response = upload(client, engineer_headers, name)
             assert response.status_code == 400, name
             assert "Unsupported file format" in response.json()["detail"]
-        assert get_task_queue().messages == []
+        assert get_task_queue().pending(ETL_QUEUE) == []
 
     def test_rejects_an_empty_file(self, client, engineer_headers):
         response = upload(client, engineer_headers, content=b"")

@@ -19,5 +19,5 @@ class DatasetResourceAssembler:
         return GetAllDatasetsQuery()
 
     @staticmethod
-    def to_response(dataset: UploadedDataset) -> DatasetResponse:
-        return DatasetResponse.model_validate(dataset)
+    def to_response(dataset: UploadedDataset, summary: dict | None = None) -> DatasetResponse:
+        return DatasetResponse.model_validate(dataset).model_copy(update={"summary": summary})

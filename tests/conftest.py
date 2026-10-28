@@ -6,6 +6,7 @@ The environment is configured BEFORE the application is imported: the database e
 service read it at import time (values already in the environment win over the developer's .env).
 """
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -37,6 +38,12 @@ async def _reset_database() -> None:
         await connection.run_sync(Base.metadata.create_all)
     await main.seed_roles()
     await main.seed_supervisor()
+
+
+@pytest.fixture(autouse=True)
+def empty_storage():
+    """The uploaded files and the queued tasks live on disk, so every test starts without them."""
+    shutil.rmtree(os.environ["LOCAL_STORAGE_DIR"], ignore_errors=True)
 
 
 @pytest.fixture
