@@ -13,6 +13,7 @@ _DB_FILE = Path(tempfile.mkdtemp(prefix="voltcast-tests-")) / "test.db"
 
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_DB_FILE.as_posix()}"
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-for-the-automated-tests-only"
+os.environ["LOCAL_STORAGE_DIR"] = str(_DB_FILE.parent / "storage")
 os.environ["REDIS_URL"] = ""  # the rate limiter is skipped unless a test enables it
 os.environ["SEED_ADMIN_EMAIL"] = "supervisor@voltcast.com"
 os.environ["SEED_ADMIN_PASSWORD"] = "Super#Pass1"
