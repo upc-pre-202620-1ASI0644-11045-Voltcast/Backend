@@ -25,3 +25,19 @@ def workbook_bytes(sheets: dict[str, list[list]]) -> bytes:
     buffer = BytesIO()
     workbook.save(buffer)
     return buffer.getvalue()
+
+
+def varying_rows(days: int = 520, cells: list[int] | None = None, seed: int = 0) -> list[list]:
+    """Like section_rows but with a slow trend and noise, so a model has something to learn."""
+    import numpy as np
+
+    cells = cells or [1, 2, 3, 4]
+    rng = np.random.default_rng(seed)
+    t = np.arange(days)
+    level = 3.2 + 0.05 * np.sin(t / 60) + 0.00005 * t
+    ka = 14.8 + rng.normal(0, 0.3, days)
+    rows = [["Date", "[Volts]", "[kA]", *cells]]
+    for day in range(days):
+        volts = [float(level[day] + 0.01 * n + rng.normal(0, 0.004)) for n in cells]
+        rows.append([datetime(2025, 1, 1) + timedelta(days=day), sum(volts), float(ka[day]), *volts])
+    return rows

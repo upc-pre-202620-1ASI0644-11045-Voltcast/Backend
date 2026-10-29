@@ -30,7 +30,8 @@ class TrainingCommandServiceImpl:
         if await self._repository.exists_running():
             raise ValueError("A training is already in progress")
 
-        version = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+        # Microseconds too: the version is unique per model name and two requests can come within the same second.
+        version = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
         model = MlModel(name=MODEL_NAME, version=version, artifact_path=f"models/{MODEL_NAME}/{version}")
         execution = await self._repository.create_training(
             model, TrainingExecution(dataset_id=dataset.id, executed_by=command.user_id)

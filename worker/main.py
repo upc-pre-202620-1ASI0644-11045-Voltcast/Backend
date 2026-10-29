@@ -1,13 +1,14 @@
 import logging
 
-from shared.infrastructure.queue.task_queue import ETL_QUEUE, get_task_queue
+from shared.infrastructure.queue.task_queue import ETL_QUEUE, TRAINING_QUEUE, get_task_queue
 from shared.infrastructure.storage.file_storage import get_file_storage
 from worker.tasks.etl_task import process_etl
+from worker.tasks.training_task import process_training
 
 logger = logging.getLogger(__name__)
 
 # task name -> (queue it reads, handler)
-TASKS = {"etl": (ETL_QUEUE, process_etl)}
+TASKS = {"etl": (ETL_QUEUE, process_etl), "training": (TRAINING_QUEUE, process_training)}
 
 
 async def run(task: str) -> bool:

@@ -16,6 +16,11 @@ def cell_name(el: str, n: int | str) -> str:
     return f"{el}_c{int(n):03d}"
 
 
+def database_cell_name(celda: str) -> str:
+    """'A_c001' -> 'A1': the name the cell has in the database."""
+    return f"{celda[0]}{int(celda.split('_c')[1])}"
+
+
 def daily_wide(bronze: pd.DataFrame, el: str, cell_cols: list[str], calendar: pd.DatetimeIndex) -> pd.DataFrame:
     """
     Rows of a section -> continuous daily table with `{el}_V_total`, `{el}_kA`, `{el}_c001`...
