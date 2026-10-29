@@ -71,6 +71,6 @@ class ForecastingResourceAssembler:
     @staticmethod
     def to_metrics_response(view: MetricsView) -> MetricsResponse:
         return MetricsResponse(
-            model=view.model, retraining=view.retraining, message=view.message, samples=view.samples,
-            mse=view.mse, rmse=view.rmse, mae=view.mae, mape=view.mape,
+            model=view.model, retraining=view.retraining, message=view.message,
+            mse=view.mse, rmse=view.rmse, mae=view.mae, mape=view.mape, r2=view.r2,
         )

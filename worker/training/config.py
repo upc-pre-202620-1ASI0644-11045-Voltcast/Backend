@@ -12,12 +12,14 @@ KA_SHUTDOWN = 10.0  # kA below this is a shutdown day
 # [Volts] adds up every physical cell of the electrolyzer even when the Excel lists fewer of them.
 PHYSICAL_CELLS_PER_ELECTROLYZER = 181
 STEP_THRESHOLD_MASK = 0.03  # level shift (V) after which the training targets are ignored
-ES_BLOCK_DAYS = 270  # last days of the data used to stop training early and to evaluate
-BACKTEST_DAYS = 60  # the evaluation forecasts this many days from an origin inside that block
+ES_BLOCK_DAYS = 270  # last days of the training part used to stop training early
+VAL_FRACTION = 0.20  # share of the most recent days kept out of the first training to measure its accuracy, as in the PoC
+EVAL_ORIGIN_STRIDE_DAYS = 28  # days between forecast origins of that measurement (the PoC used 7: four times the VMD work)
+BACKTEST_DAYS = 60  # forecast days of the backtest stored for each cell, from the last origin with that much real data after it
 VMD_HISTORY = 730  # days of history of the causal VMD
 VMD_MIN_LEN = 60  # shortest in-service stretch that can be decomposed
 VMD_N_DROP = 3  # highest-frequency modes left out of the filtered signal
-MIN_DAYS = ES_BLOCK_DAYS + HORIZON_DAYS  # less data than this cannot train and evaluate
+MIN_DAYS = 900  # less data than this leaves too little to train on, stop early and still validate
 SEED = 42
 
 TRAIN = {

@@ -38,11 +38,31 @@ def _pivot(silver: pd.DataFrame, value: str, cells: list[str]) -> pd.DataFrame:
     return w[cells]
 
 
-def _standardize(values: pd.Series, mask: pd.Series) -> tuple[pd.Series, dict]:
-    """z-score clipped to +-COV_CLIP, with mean and deviation taken from the days of `mask` (no shutdowns)."""
-    mean, std = float(values[mask].mean()), float(values[mask].std())
-    std = std if np.isfinite(std) and std > 0 else 1.0
-    return ((values - mean) / std).clip(-config.COV_CLIP, config.COV_CLIP), {"media": mean, "desvio": std}
+def _standardize(values: pd.Series, mask: pd.Series, stats: dict | None = None) -> tuple[pd.Series, dict]:
+    """z-score clipped to +-COV_CLIP, with mean and deviation taken from the days of `mask` (no shutdowns) unless `stats` is given."""
+    if stats is None:
+        mean, std = float(values[mask].mean()), float(values[mask].std())
+        stats = {"media": mean, "desvio": std if np.isfinite(std) and std > 0 else 1.0}
+    return ((values - stats["media"]) / stats["desvio"]).clip(-config.COV_CLIP, config.COV_CLIP), stats
+
+
+def covariates_z(silver: pd.DataFrame, cells: list[str], dates: pd.DatetimeIndex,
+                 stats: dict | None = None) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """
+    kA and voltage per in-service cell of each section, standardized and spread over its cells (`[dates, cells]`).
+    `stats` fixes the mean and deviation (the ones of the training days) instead of fitting them to these days.
+    """
+    cov = silver.groupby(["fecha", "electrolizador"], observed=True)[["kA", "V_total", "n_en_servicio"]].first().reset_index()
+    cells_per_section = silver.groupby("electrolizador", observed=True)["celda"].nunique()
+    extra = config.PHYSICAL_CELLS_PER_ELECTROLYZER - cov["electrolizador"].map(cells_per_section).astype(int)
+    cov["V_celda_media"] = cov["V_total"] / (cov["n_en_servicio"] + extra)
+    running = cov["kA"] >= config.KA_SHUTDOWN
+    cov["kA_z"], ka_stats = _standardize(cov["kA"], running, stats and stats["kA"])
+    cov["vcel_z"], vc_stats = _standardize(cov["V_celda_media"], running, stats and stats["V_celda_media"])
+    z = {name: cov.pivot(index="fecha", columns="electrolizador", values=name).reindex(dates) for name in ("kA_z", "vcel_z")}
+    ka = pd.DataFrame({c: z["kA_z"][c[0]] for c in cells})
+    vc = pd.DataFrame({c: z["vcel_z"][c[0]] for c in cells})
+    return ka, vc, {"kA": ka_stats, "V_celda_media": vc_stats}
 
 
 def prepare(silver: pd.DataFrame, n_jobs: int = -1) -> Prepared:
@@ -59,16 +79,7 @@ def prepare(silver: pd.DataFrame, n_jobs: int = -1) -> Prepared:
     )
     vf = pd.DataFrame(np.column_stack(filtered), index=dates, columns=cells)
 
-    cov = silver.groupby(["fecha", "electrolizador"], observed=True)[["kA", "V_total", "n_en_servicio"]].first().reset_index()
-    cells_per_section = silver.groupby("electrolizador", observed=True)["celda"].nunique()
-    extra = config.PHYSICAL_CELLS_PER_ELECTROLYZER - cov["electrolizador"].map(cells_per_section).astype(int)
-    cov["V_celda_media"] = cov["V_total"] / (cov["n_en_servicio"] + extra)
-    running = cov["kA"] >= config.KA_SHUTDOWN
-    cov["kA_z"], ka_stats = _standardize(cov["kA"], running)
-    cov["vcel_z"], vc_stats = _standardize(cov["V_celda_media"], running)
-    z = {name: cov.pivot(index="fecha", columns="electrolizador", values=name).reindex(dates) for name in ("kA_z", "vcel_z")}
-    ka = pd.DataFrame({c: z["kA_z"][c[0]] for c in cells})
-    vc = pd.DataFrame({c: z["vcel_z"][c[0]] for c in cells})
+    ka, vc, covariates = covariates_z(silver, cells, dates)
 
     anc = anchor(vf)
     sigma = delta_sigma(v, quality == "ok", anc, origin_ok(anc, oos, config.SIGMA_LOOKBACK_DAYS))
@@ -79,5 +90,5 @@ def prepare(silver: pd.DataFrame, n_jobs: int = -1) -> Prepared:
         dates=dates, cells=cells, v=v, vf=vf, ka=ka, vc=vc,
         valid=quality.isin(["ok", "interpolado"]), obj=quality == "ok", oos=oos,
         codes=quality.apply(lambda s: pd.Categorical(s, categories=CALIDAD).codes), params=params, sigma=sigma,
-        covariates={"kA": ka_stats, "V_celda_media": vc_stats},
+        covariates=covariates,
     )

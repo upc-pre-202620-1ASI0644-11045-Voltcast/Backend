@@ -1,14 +1,18 @@
 import os
+from datetime import date, timedelta
 from functools import partial
 from pathlib import Path
 
 import pytest
+from sqlalchemy import func, select
 
+from shared.infrastructure.persistence.configuration.database_configuration import AsyncSessionLocal
 from shared.infrastructure.queue.task_queue import TRAINING_QUEUE, get_task_queue
 from tests.api.test_datasets import upload
 from tests.api.test_etl import run_etl
 from tests.conftest import API
 from tests.excel_files import section_rows, varying_rows, workbook_bytes
+from voltage_forecasting.domain.model.aggregates.ModelEvaluation import ModelEvaluationResult
 from worker.main import run
 from worker.training import config
 from worker.training.pipeline import train
@@ -26,11 +30,23 @@ def small_network(monkeypatch):
     monkeypatch.setattr("worker.tasks.training_task.train", partial(train, cfg=SMALL, n_jobs=1))
 
 
+def db(client, fn):
+    async def run_query():
+        async with AsyncSessionLocal() as session:
+            return await fn(session)
+
+    return client.portal.call(run_query)
+
+
 def run_training(client) -> bool:
     return client.portal.call(run, "training")
 
 
-def cleaned_dataset(client, headers, days=520) -> int:
+DAYS = config.MIN_DAYS  # the least that can be validated
+LAST_DAY = date(2025, 1, 1) + timedelta(days=DAYS - 1)  # the synthetic workbooks start on 2025-01-01
+
+
+def cleaned_dataset(client, headers, days=DAYS) -> int:
     sheets = {"EL A 2020_2026": varying_rows(days, [1, 2, 3]), "Sección B": varying_rows(days, [1, 2], seed=1)}
     response = upload(client, headers, content=workbook_bytes(sheets))
     assert response.status_code == 201, response.text
@@ -57,23 +73,33 @@ class TestTrainModel:  # US005, US006
 
         body = client.get(FORECASTS, headers=engineer_headers).json()
         assert body["model"]["id"] == training["model_id"] and body["retraining"] is False
-        assert (body["available_from"], body["available_to"]) == ("2026-06-05", "2026-12-01")  # 180 days after the data
+        assert (body["available_from"], body["available_to"]) == (
+            str(LAST_DAY + timedelta(days=1)), str(LAST_DAY + timedelta(days=config.HORIZON_DAYS)))
         assert len(body["items"]) == 5  # one day of the 5 cells
 
     def test_forecasts_cover_the_whole_horizon_by_date(self, client, engineer_headers):
         request_training(client, engineer_headers, cleaned_dataset(client, engineer_headers))
         run_training(client)
         span = client.get(FORECASTS, headers=engineer_headers,
-                          params={"date_from": "2026-06-05", "date_to": "2026-12-01", "cell_id": 1}).json()
+                          params={"date_from": str(LAST_DAY + timedelta(days=1)), "date_to": str(LAST_DAY + timedelta(days=180)), "cell_id": 1}).json()
         assert len(span["items"]) == 180 and {i["cell_name"] for i in span["items"]} == {"A1"}
 
-    def test_the_metrics_compare_the_forecast_with_the_measured_voltage(self, client, engineer_headers):
-        request_training(client, engineer_headers, cleaned_dataset(client, engineer_headers))
+    def test_the_metrics_are_the_ones_measured_on_the_validation_days(self, client, engineer_headers):
+        training = request_training(client, engineer_headers, cleaned_dataset(client, engineer_headers))
         run_training(client)
         metrics = client.get(f"{FORECASTS}/metrics", headers=engineer_headers).json()
-        assert metrics["samples"] == 5 * config.BACKTEST_DAYS
-        assert metrics["rmse"] ** 2 == pytest.approx(metrics["mse"])
-        assert 0 < metrics["mae"] <= metrics["rmse"] and metrics["mape"] > 0
+        done = client.get(f"{TRAININGS}/{training['id']}", headers=engineer_headers).json()
+        assert (metrics["rmse"], metrics["mae"], metrics["mape"], metrics["r2"]) == (done["rmse"], done["mae"], done["mape"], done["r2"])
+        assert metrics["rmse"] ** 2 == pytest.approx(metrics["mse"]) and 0 < metrics["mae"] <= metrics["rmse"]
+
+    def test_stores_a_backtest_of_every_cell_against_the_measured_voltage(self, client, engineer_headers):
+        request_training(client, engineer_headers, cleaned_dataset(client, engineer_headers))
+        run_training(client)
+
+        async def count(session):
+            return (await session.execute(select(func.count(), func.count(func.distinct(ModelEvaluationResult.cell_id))))).one()
+
+        assert db(client, count) == (5 * config.BACKTEST_DAYS, 5)
 
     def test_saves_the_model_files(self, client, engineer_headers):
         request_training(client, engineer_headers, cleaned_dataset(client, engineer_headers))

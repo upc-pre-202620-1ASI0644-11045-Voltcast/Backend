@@ -73,8 +73,8 @@ class MetricsResponse(BaseModel):
     model: ModelVersionResponse | None
     retraining: bool
     message: str | None
-    samples: int
     mse: float | None
     rmse: float | None
     mae: float | None
     mape: float | None
+    r2: float | None

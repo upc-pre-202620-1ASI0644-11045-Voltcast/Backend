@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
-from math import sqrt
 
 from voltage_forecasting.domain.model.aggregates.MlModel import MlModel
 from voltage_forecasting.domain.model.queries.ForecastingQueries import GetForecastsQuery, GetModelMetricsQuery
@@ -39,11 +38,11 @@ class MetricsView:
     model: MlModel | None
     retraining: bool
     message: str | None
-    samples: int = 0
     mse: float | None = None
     rmse: float | None = None
     mae: float | None = None
     mape: float | None = None  # percentage
+    r2: float | None = None
 
 
 class ForecastQueryServiceImpl:
@@ -91,17 +90,16 @@ class ForecastQueryServiceImpl:
         return view
 
     async def get_model_metrics(self, query: GetModelMetricsQuery) -> MetricsView:
-        """Accuracy of the active model over its latest evaluation against real data (US006)."""
+        """
+        Accuracy of the active model (US006): the run that trained it measured it on days it had not seen
+        (see worker.training.pipeline.train). The MSE is the squared RMSE.
+        """
         model = await self._repository.find_active_model()
         retraining = await self._training_repo.exists_running()
         if not model:
             return MetricsView(None, retraining, NO_MODEL_MESSAGE)
         view = MetricsView(model, retraining, RETRAINING_MESSAGE if retraining else None)
-        evaluation = await self._repository.find_latest_evaluation(model.id)
-        if not evaluation:
-            return view
-        samples, mse, mae, mape = await self._repository.evaluation_error_stats(evaluation.id)
-        if samples:
-            view.samples, view.mse, view.rmse, view.mae = samples, mse, sqrt(mse), mae
-            view.mape = None if mape is None else mape * 100
+        run = await self._repository.find_latest_success(model.id)
+        if run and run.rmse is not None:
+            view.mse, view.rmse, view.mae, view.mape, view.r2 = run.rmse ** 2, run.rmse, run.mae, run.mape, run.r2
         return view

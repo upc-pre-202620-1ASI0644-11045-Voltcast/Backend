@@ -77,3 +77,20 @@ class TestWorkerStartsAlone:
         env = {**os.environ, "DATABASE_URL": f"sqlite+aiosqlite:///{tmp_path / 'x.db'}"}
         done = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, cwd=Path(__file__).parents[2])
         assert done.returncode == 0, done.stderr[-600:]
+
+
+class TestCovariates:
+    def test_given_statistics_replace_the_ones_fitted_to_the_days(self):
+        import pandas as pd
+
+        from worker.training.gold import covariates_z
+
+        days = pd.date_range("2026-01-01", periods=20)
+        silver = pd.DataFrame({"fecha": days, "electrolizador": "A", "celda": "A_c001", "kA": 14.0 + np.arange(20) / 10,
+                               "V_total": 600.0, "n_en_servicio": 150})
+        fitted_ka, _, fitted = covariates_z(silver, ["A_c001"], days)
+        fixed = {"kA": {"media": 14.0, "desvio": 1.0}, "V_celda_media": {"media": 3.0, "desvio": 1.0}}
+        ka, _, stats = covariates_z(silver, ["A_c001"], days, fixed)
+        assert stats == fixed and fitted["kA"]["media"] != 14.0
+        assert ka["A_c001"].iloc[0] == pytest.approx(0.0) and ka["A_c001"].iloc[10] == pytest.approx(1.0)
+        assert fitted_ka["A_c001"].mean() == pytest.approx(0.0, abs=1e-9)

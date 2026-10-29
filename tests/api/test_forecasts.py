@@ -1,5 +1,5 @@
 from datetime import datetime
-from math import isclose, sqrt
+from math import isclose
 
 from dataset_management.domain.model.aggregates.UploadedDataset import DatasetStatus, UploadedDataset
 from shared.infrastructure.persistence.configuration.database_configuration import AsyncSessionLocal
@@ -7,9 +7,8 @@ from shared.infrastructure.queue.task_queue import TRAINING_QUEUE, get_task_queu
 from tests.api.test_cells import create_cell
 from tests.conftest import API
 from voltage_forecasting.domain.model.aggregates.MlModel import MlModel
-from voltage_forecasting.domain.model.aggregates.ModelEvaluation import ModelEvaluation, ModelEvaluationResult
 from voltage_forecasting.domain.model.aggregates.Prediction import Prediction
-from voltage_forecasting.domain.model.aggregates.TrainingExecution import TrainingExecution
+from voltage_forecasting.domain.model.aggregates.TrainingExecution import TrainingExecution, TrainingStatus
 
 FORECASTS = f"{API}/forecasts"
 TRAININGS = f"{API}/trainings"
@@ -117,25 +116,23 @@ class TestRetraining:  # US005-E02, US006-E02
 
 
 class TestModelMetrics:  # US006
-    def test_calculates_the_accuracy_over_the_latest_evaluation(self, client, engineer_headers):
-        cell = create_cell(client, engineer_headers)["id"]
+    def test_reports_the_accuracy_measured_when_the_active_model_was_trained(self, client, engineer_headers):
         model = active_model(client)
         dataset = ready_dataset(client)
-        evaluation = seed(client, ModelEvaluation(model_id=model, dataset_id=dataset))[0]
-        day = datetime(2026, 9, 1)
-        seed(client,
-             ModelEvaluationResult(model_evaluation_id=evaluation, cell_id=cell, prediction_date=day,
-                                   predicted_value=3.0, real_value=2.0),
-             ModelEvaluationResult(model_evaluation_id=evaluation, cell_id=cell, prediction_date=day,
-                                   predicted_value=2.0, real_value=4.0))
+        seed(client, TrainingExecution(model_id=model, dataset_id=dataset, status=TrainingStatus.SUCCESS,
+                                       rmse=0.05, mae=0.02, mape=0.7, r2=0.8))
         body = client.get(f"{FORECASTS}/metrics", headers=engineer_headers).json()
-        assert body["samples"] == 2 and isclose(body["mse"], 2.5) and isclose(body["rmse"], sqrt(2.5))
-        assert isclose(body["mae"], 1.5) and isclose(body["mape"], 50.0)
+        assert body["model"]["id"] == model and body["retraining"] is False
+        assert isclose(body["mse"], 0.0025) and (body["rmse"], body["mae"], body["mape"], body["r2"]) == (0.05, 0.02, 0.7, 0.8)
 
-    def test_without_an_evaluation_there_are_no_metrics(self, client, engineer_headers):
+    def test_without_a_finished_run_there_are_no_metrics(self, client, engineer_headers):
         active_model(client)
         body = client.get(f"{FORECASTS}/metrics", headers=engineer_headers).json()
-        assert (body["samples"], body["rmse"]) == (0, None)
+        assert (body["mse"], body["rmse"], body["r2"]) == (None, None, None)
+
+    def test_without_a_trained_model_says_there_is_nothing_yet(self, client, engineer_headers):
+        body = client.get(f"{FORECASTS}/metrics", headers=engineer_headers).json()
+        assert body["model"] is None and "No trained model" in body["message"]
 
 
 class TestRequestTraining:  # US005
