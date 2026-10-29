@@ -33,8 +33,9 @@ class ForecastingResourceAssembler:
         return CreateAlertRuleCommand(max_voltage=request.max_voltage, cell_id=request.cell_id)
 
     @staticmethod
-    def to_forecasts_query(date_from: date | None, date_to: date | None, cell_id: int | None) -> GetForecastsQuery:
-        return GetForecastsQuery(date_from=date_from, date_to=date_to, cell_id=cell_id)
+    def to_forecasts_query(date_from: date | None, date_to: date | None, cell_id: int | None,
+                           exceeds: bool | None = None) -> GetForecastsQuery:
+        return GetForecastsQuery(date_from=date_from, date_to=date_to, cell_id=cell_id, exceeds=exceeds)
 
     @staticmethod
     def to_metrics_query() -> GetModelMetricsQuery:

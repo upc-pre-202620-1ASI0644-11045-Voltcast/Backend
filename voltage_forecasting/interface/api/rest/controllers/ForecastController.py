@@ -25,12 +25,13 @@ async def list_forecasts(
     date_from: date | None = Query(None, description="First day; defaults to the first forecast day"),
     date_to: date | None = Query(None, description="Last day; defaults to date_from (a single date)"),
     cell_id: int | None = Query(None, description="Only this cell"),
+    exceeds: bool | None = Query(None, description="true: only the forecasts above the allowed voltage; false: only the others"),
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
     """Cells whose forecast exceeds the allowed voltage come with `exceeds: true`."""
     try:
-        query = ForecastingResourceAssembler.to_forecasts_query(date_from, date_to, cell_id)
+        query = ForecastingResourceAssembler.to_forecasts_query(date_from, date_to, cell_id, exceeds)
         return ForecastingResourceAssembler.to_forecast_response(await _service(db).get_forecasts(query))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

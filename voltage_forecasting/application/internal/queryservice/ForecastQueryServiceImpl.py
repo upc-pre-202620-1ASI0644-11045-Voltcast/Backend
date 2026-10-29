@@ -82,11 +82,12 @@ class ForecastQueryServiceImpl:
         )
         for prediction, cell_name in rows:
             limit = per_cell.get(prediction.cell_id, general)
-            view.items.append(ForecastItem(
-                cell_id=prediction.cell_id, cell_name=cell_name, date=prediction.prediction_date.date(),
-                voltage=prediction.predicted_voltage, max_voltage=limit,
-                exceeds=limit is not None and prediction.predicted_voltage > limit,
-            ))
+            above = limit is not None and prediction.predicted_voltage > limit
+            if query.exceeds is None or query.exceeds == above:
+                view.items.append(ForecastItem(
+                    cell_id=prediction.cell_id, cell_name=cell_name, date=prediction.prediction_date.date(),
+                    voltage=prediction.predicted_voltage, max_voltage=limit, exceeds=above,
+                ))
         return view
 
     async def get_model_metrics(self, query: GetModelMetricsQuery) -> MetricsView:

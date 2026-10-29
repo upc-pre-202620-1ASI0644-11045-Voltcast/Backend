@@ -86,6 +86,32 @@ class TestViewForecasts:  # US007, US008
         items = client.get(FORECASTS, headers=engineer_headers).json()["items"]
         assert [(i["cell_name"], i["max_voltage"], i["exceeds"]) for i in items] == [("A1", 3.2, True), ("B1", 3.5, False)]
 
+    def test_the_exceeds_filter_keeps_only_the_cells_above_or_within_the_limit(self, client, engineer_headers, supervisor_headers):
+        a1, b1, c1 = (create_cell(client, engineer_headers, n)["id"] for n in ("A1", "B1", "C1"))
+        model = active_model(client)
+        seed(client, forecast(model, a1, 1, 3.3), forecast(model, b1, 1, 3.1), forecast(model, c1, 1, 3.4),
+             forecast(model, a1, 2, 3.0), forecast(model, b1, 2, 3.5))
+        client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": 3.2})
+        both_days = {"date_from": "2026-09-01", "date_to": "2026-09-02"}
+
+        def names(**params):
+            items = client.get(FORECASTS, headers=engineer_headers, params={**both_days, **params}).json()["items"]
+            return [(i["cell_name"], i["date"]) for i in items]
+
+        assert names(exceeds="true") == [("A1", "2026-09-01"), ("C1", "2026-09-01"), ("B1", "2026-09-02")]
+        assert names(exceeds="false") == [("B1", "2026-09-01"), ("A1", "2026-09-02")]
+        assert len(names()) == 5
+        assert names(exceeds="true", cell_id=a1) == [("A1", "2026-09-01")]
+        assert names(exceeds="true", date_from="2026-09-02", date_to="2026-09-02") == [("B1", "2026-09-02")]
+
+    def test_the_exceeds_filter_returns_nothing_when_no_limit_is_set(self, client, engineer_headers):
+        seed(client, forecast(active_model(client), create_cell(client, engineer_headers)["id"], 1, 99.0))
+        assert client.get(FORECASTS, headers=engineer_headers, params={"exceeds": "true"}).json()["items"] == []
+        assert len(client.get(FORECASTS, headers=engineer_headers, params={"exceeds": "false"}).json()["items"]) == 1
+
+    def test_rejects_an_exceeds_value_that_is_not_a_boolean(self, client, engineer_headers):
+        assert client.get(FORECASTS, headers=engineer_headers, params={"exceeds": "maybe"}).status_code == 422
+
     def test_without_a_limit_nothing_is_flagged(self, client, engineer_headers):
         seed(client, forecast(active_model(client), create_cell(client, engineer_headers)["id"], 1, 99.0))
         item = client.get(FORECASTS, headers=engineer_headers).json()["items"][0]

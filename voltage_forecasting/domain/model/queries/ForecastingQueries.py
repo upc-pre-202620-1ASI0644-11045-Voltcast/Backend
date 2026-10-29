@@ -7,6 +7,7 @@ class GetForecastsQuery:
     date_from: date | None = None
     date_to: date | None = None
     cell_id: int | None = None
+    exceeds: bool | None = None  # only the forecasts above (True) or within (False) the allowed voltage
 
 
 @dataclass(frozen=True)
