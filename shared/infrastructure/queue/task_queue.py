@@ -5,6 +5,8 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
+from azure.storage.queue.aio import QueueClient
+
 # Azure Storage Queue names: lowercase letters, numbers and hyphens only.
 ETL_QUEUE = "etl-tasks"
 TRAINING_QUEUE = "training-tasks"
@@ -15,8 +17,7 @@ class LocalTaskQueue:
     One JSON file per message in a folder shared by the API and the worker, so both can run as separate
     processes without Azure. A received message stays in the folder until it is deleted, so a worker that
     dies halfway finds it again (at-least-once, like an Azure Storage Queue).
-    shortcut: a single worker, two workers could take the same message; the Azure Storage Queue implementation
-    replaces it in the cloud setup.
+    shortcut: a single worker, two workers could take the same message; use AZURE_STORAGE_CONNECTION_STRING in the cloud.
     """
 
     def __init__(self, root: Path):
@@ -49,5 +50,38 @@ class LocalTaskQueue:
         return [json.loads(p.read_text(encoding="utf-8")) for p in sorted((self._root / queue).glob("*.json"))]
 
 
-def get_task_queue() -> LocalTaskQueue:
+class AzureTaskQueue:
+    """
+    The same queues in Azure Storage Queues, which have to exist already. A received message turns invisible for
+    VISIBILITY_SECONDS: if the worker dies, it shows up again after that and is retried.
+    """
+
+    VISIBILITY_SECONDS = 3600
+
+    def __init__(self, connection_string: str):
+        self._connection_string = connection_string
+
+    def _client(self, queue: str) -> QueueClient:
+        return QueueClient.from_connection_string(self._connection_string, queue)
+
+    async def send(self, queue: str, message: dict) -> None:
+        async with self._client(queue) as client:
+            await client.send_message(json.dumps(message))
+
+    async def receive(self, queue: str) -> tuple[dict, tuple] | None:
+        async with self._client(queue) as client:
+            async for received in client.receive_messages(max_messages=1, visibility_timeout=self.VISIBILITY_SECONDS):
+                return json.loads(received.content), (queue, received)
+        return None
+
+    async def delete(self, handle: tuple) -> None:
+        queue, received = handle
+        async with self._client(queue) as client:
+            await client.delete_message(received)
+
+
+def get_task_queue() -> LocalTaskQueue | AzureTaskQueue:
+    connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    if connection_string:
+        return AzureTaskQueue(connection_string)
     return LocalTaskQueue(Path(os.getenv("LOCAL_STORAGE_DIR", "storage")) / "queues")
