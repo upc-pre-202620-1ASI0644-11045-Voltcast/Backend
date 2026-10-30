@@ -1,0 +1,9 @@
+-r requirements.txt
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.11.0+cpu
+pandas==3.0.6
+numpy==2.5.3
+pyarrow==25.0.1
+openpyxl==3.1.5
+vmdpy==0.2
+joblib==1.6.0

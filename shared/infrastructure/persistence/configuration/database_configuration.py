@@ -1,5 +1,6 @@
 import os
 import asyncio
+import ssl
 from typing import AsyncGenerator, Any
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
@@ -27,7 +28,9 @@ engine = create_async_engine(
     pool_size=10,
     max_overflow=20,
     pool_pre_ping=True,
-    pool_recycle=3600
+    pool_recycle=3600,
+    # Azure Database for MySQL rejects non-TLS connections
+    connect_args={"ssl": ssl.create_default_context()} if os.getenv("DB_SSL") == "true" else {},
 )
 
 # MySQL: no SET TIME ZONE here (not supported)
