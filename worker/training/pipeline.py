@@ -4,7 +4,7 @@ from io import BytesIO
 import numpy as np
 import pandas as pd
 import torch
-from joblib import Parallel, delayed
+from joblib import Parallel, cpu_count, delayed
 
 from worker.etl.cleaning import level_shifts
 from worker.training import config, vmd
@@ -21,6 +21,11 @@ class TrainingResult:
     evaluation: pd.DataFrame  # celda, fecha, predicho, real: a backtest forecast against the measured voltage
     metrics: dict  # rmse, mae, mape (percentage), r2 over every forecast of the validation days
     best_epoch: int
+
+
+def _limit_threads() -> None:
+    """torch counts the host cores, not the CPU quota of the container, and would oversubscribe it; joblib does respect the quota."""
+    torch.set_num_threads(max(1, min(torch.get_num_threads(), cpu_count())))
 
 
 def _causal_windows(p: Prepared, origins: list[int], n_jobs: int) -> np.ndarray:
@@ -111,6 +116,7 @@ def train(silver: pd.DataFrame, cfg: dict = config.TRAIN, n_jobs: int = -1, log=
     2. Serving model: train again on every day for as many epochs, and forecast the next HORIZON_DAYS days.
     The reported metrics are the ones of step 1, which has the same recipe as step 2 but less data.
     """
+    _limit_threads()
     all_dates = pd.DatetimeIndex(sorted(silver["fecha"].unique()))
     T = len(all_dates)
     if T < config.MIN_DAYS:

@@ -70,6 +70,18 @@ class TestMetrics:
         assert metrics["mape"] == pytest.approx(50.0) and metrics["r2"] == pytest.approx(1 - 5 / 2)
 
 
+class TestThreads:
+    def test_torch_never_uses_more_threads_than_the_cpus_available(self):
+        import torch
+        from joblib import cpu_count
+
+        from worker.training.pipeline import _limit_threads
+
+        torch.set_num_threads(cpu_count() + 6)
+        _limit_threads()
+        assert 1 <= torch.get_num_threads() <= cpu_count()
+
+
 class TestWorkerStartsAlone:
     def test_every_table_the_worker_writes_can_resolve_its_foreign_keys_without_the_api(self, tmp_path):
         """The worker does not import the API, so each table a foreign key points to has to be imported by the worker itself."""
