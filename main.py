@@ -13,6 +13,12 @@ from iam.interface.api.rest.controllers.UserController import router as user_rou
 from cell_management.interface.api.rest.controllers.CellController import router as cell_router
 from cell_management.interface.api.rest.controllers.ComponentController import router as component_router
 from cell_management.infrastructure.persistence.schema_sync import sync_cell_management_schema
+from dataset_management.interface.api.rest.controllers.DatasetController import router as dataset_router
+from voltage_forecasting.interface.api.rest.controllers.ForecastController import router as forecast_router
+from voltage_forecasting.interface.api.rest.controllers.TrainingController import router as training_router
+from voltage_forecasting.interface.api.rest.controllers.AlertRuleController import router as alert_rule_router
+# Imported so create_all also creates the tables only the Job writes to.
+from voltage_forecasting.domain.model.aggregates import ModelEvaluation as _model_evaluation  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +84,10 @@ app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(cell_router)
 app.include_router(component_router)
+app.include_router(dataset_router)
+app.include_router(forecast_router)
+app.include_router(training_router)
+app.include_router(alert_rule_router)
 
 
 @app.get("/")

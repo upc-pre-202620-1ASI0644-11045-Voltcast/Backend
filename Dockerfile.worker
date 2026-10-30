@@ -1,0 +1,12 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+
+COPY requirements.txt requirements-worker.txt ./
+RUN pip install --no-cache-dir -r requirements-worker.txt
+
+COPY . .
+
+# One execution handles one queued message, like one run of a Container Apps Job: docker run <image> etl
+ENTRYPOINT ["python", "-m", "worker"]
+CMD ["etl"]

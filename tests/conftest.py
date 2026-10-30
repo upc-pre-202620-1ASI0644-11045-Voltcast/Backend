@@ -6,6 +6,7 @@ The environment is configured BEFORE the application is imported: the database e
 service read it at import time (values already in the environment win over the developer's .env).
 """
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -13,6 +14,7 @@ _DB_FILE = Path(tempfile.mkdtemp(prefix="voltcast-tests-")) / "test.db"
 
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_DB_FILE.as_posix()}"
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-for-the-automated-tests-only"
+os.environ["LOCAL_STORAGE_DIR"] = str(_DB_FILE.parent / "storage")
 os.environ["REDIS_URL"] = ""  # the rate limiter is skipped unless a test enables it
 os.environ["SEED_ADMIN_EMAIL"] = "supervisor@voltcast.com"
 os.environ["SEED_ADMIN_PASSWORD"] = "Super#Pass1"
@@ -36,6 +38,12 @@ async def _reset_database() -> None:
         await connection.run_sync(Base.metadata.create_all)
     await main.seed_roles()
     await main.seed_supervisor()
+
+
+@pytest.fixture(autouse=True)
+def empty_storage():
+    """The uploaded files and the queued tasks live on disk, so every test starts without them."""
+    shutil.rmtree(os.environ["LOCAL_STORAGE_DIR"], ignore_errors=True)
 
 
 @pytest.fixture
