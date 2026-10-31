@@ -1,11 +1,12 @@
 from datetime import date
 from dataclasses import asdict
 
-from voltage_forecasting.application.internal.queryservice.ForecastQueryServiceImpl import ForecastView, MetricsView
+from voltage_forecasting.application.internal.queryservice.ForecastQueryServiceImpl import EvaluationView, ForecastView, MetricsView
 from voltage_forecasting.domain.model.aggregates.AlertRule import AlertRule
 from voltage_forecasting.domain.model.aggregates.TrainingExecution import TrainingExecution
 from voltage_forecasting.domain.model.commands.ForecastingCommands import RequestTrainingCommand, CreateAlertRuleCommand
 from voltage_forecasting.domain.model.queries.ForecastingQueries import (
+    GetEvaluationQuery,
     GetForecastsQuery,
     GetModelMetricsQuery,
     GetTrainingByIdQuery,
@@ -15,6 +16,7 @@ from voltage_forecasting.domain.model.queries.ForecastingQueries import (
 from voltage_forecasting.interface.api.rest.resources.ForecastingResource import (
     AlertRuleRequest,
     AlertRuleResponse,
+    EvaluationResponse,
     ForecastResponse,
     MetricsResponse,
     TrainingRequest,
@@ -36,6 +38,10 @@ class ForecastingResourceAssembler:
     def to_forecasts_query(date_from: date | None, date_to: date | None, cell_id: int | None,
                            exceeds: bool | None = None) -> GetForecastsQuery:
         return GetForecastsQuery(date_from=date_from, date_to=date_to, cell_id=cell_id, exceeds=exceeds)
+
+    @staticmethod
+    def to_evaluation_query(day: date | None, limit: int, worst_first: bool) -> GetEvaluationQuery:
+        return GetEvaluationQuery(day=day, limit=limit, worst_first=worst_first)
 
     @staticmethod
     def to_metrics_query() -> GetModelMetricsQuery:
@@ -74,4 +80,12 @@ class ForecastingResourceAssembler:
         return MetricsResponse(
             model=view.model, retraining=view.retraining, message=view.message,
             mse=view.mse, rmse=view.rmse, mae=view.mae, mape=view.mape, r2=view.r2,
+        )
+
+    @staticmethod
+    def to_evaluation_response(view: EvaluationView) -> EvaluationResponse:
+        return EvaluationResponse(
+            model=view.model, retraining=view.retraining, message=view.message,
+            available_from=view.available_from, available_to=view.available_to, date=view.day,
+            total_cells=view.total_cells, mean_error_pct=view.mean_error_pct, items=[asdict(item) for item in view.items],
         )

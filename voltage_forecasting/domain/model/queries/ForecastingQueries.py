@@ -16,6 +16,13 @@ class GetModelMetricsQuery:
 
 
 @dataclass(frozen=True)
+class GetEvaluationQuery:
+    day: date | None = None  # defaults to the latest day with validation data
+    limit: int = 10
+    worst_first: bool = True
+
+
+@dataclass(frozen=True)
 class GetTrainingByIdQuery:
     training_id: int
 

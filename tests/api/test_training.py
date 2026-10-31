@@ -131,6 +131,50 @@ class TestTrainModel:  # US005, US006
         assert items and all(i["exceeds"] for i in items)
 
 
+class TestEvaluationTable:  # US006: forecast against measured voltage, cell by cell
+    EVALUATION = f"{FORECASTS}/evaluation"
+
+    def trained(self, client, headers):
+        request_training(client, headers, cleaned_dataset(client, headers))
+        run_training(client)
+
+    def test_compares_every_cell_on_the_latest_day_of_the_backtest(self, client, engineer_headers):
+        self.trained(client, engineer_headers)
+        body = client.get(self.EVALUATION, headers=engineer_headers).json()
+        assert (body["available_from"], body["available_to"]) == (
+            str(LAST_DAY - timedelta(days=config.BACKTEST_DAYS - 1)), str(LAST_DAY))
+        assert body["date"] == str(LAST_DAY) and body["total_cells"] == 5 and len(body["items"]) == 5
+        for item in body["items"]:
+            assert item["error_v"] == pytest.approx(abs(item["real"] - item["predicted"]))
+            assert item["error_pct"] == pytest.approx(100 * item["error_v"] / item["real"])
+        assert body["mean_error_pct"] == pytest.approx(sum(i["error_pct"] for i in body["items"]) / 5)
+
+    def test_returns_the_cells_with_the_largest_error_first_or_the_smallest(self, client, engineer_headers):
+        self.trained(client, engineer_headers)
+        worst = client.get(self.EVALUATION, headers=engineer_headers, params={"limit": 3}).json()
+        best = client.get(self.EVALUATION, headers=engineer_headers, params={"limit": 3, "order": "best"}).json()
+        everything = [i["error_pct"] for i in client.get(self.EVALUATION, headers=engineer_headers, params={"limit": 300}).json()["items"]]
+        assert [i["error_pct"] for i in worst["items"]] == sorted(everything, reverse=True)[:3]
+        assert [i["error_pct"] for i in best["items"]] == sorted(everything)[:3]
+        assert worst["total_cells"] == best["total_cells"] == 5 and worst["mean_error_pct"] == best["mean_error_pct"]
+
+    def test_a_day_of_the_backtest_can_be_chosen(self, client, engineer_headers):
+        self.trained(client, engineer_headers)
+        day = str(LAST_DAY - timedelta(days=10))
+        assert client.get(self.EVALUATION, headers=engineer_headers, params={"date": day}).json()["date"] == day
+
+    def test_a_day_without_comparison_is_refused_with_the_available_range(self, client, engineer_headers):
+        self.trained(client, engineer_headers)
+        response = client.get(self.EVALUATION, headers=engineer_headers, params={"date": str(LAST_DAY + timedelta(days=1))})
+        assert response.status_code == 400 and str(LAST_DAY) in response.json()["detail"]
+        assert client.get(self.EVALUATION, headers=engineer_headers, params={"limit": 301}).status_code == 422
+        assert client.get(self.EVALUATION, headers=engineer_headers, params={"order": "up"}).status_code == 422
+
+    def test_says_so_when_there_is_no_trained_model(self, client, engineer_headers):
+        body = client.get(self.EVALUATION, headers=engineer_headers).json()
+        assert body["model"] is None and body["items"] == [] and body["message"]
+
+
 class TestTrainingThatCannotRun:
     def test_too_little_data_ends_as_failed_and_stays_visible(self, client, engineer_headers):
         training = request_training(client, engineer_headers, cleaned_dataset(client, engineer_headers, days=60))

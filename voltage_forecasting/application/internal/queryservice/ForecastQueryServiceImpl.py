@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 
 from voltage_forecasting.domain.model.aggregates.MlModel import MlModel
-from voltage_forecasting.domain.model.queries.ForecastingQueries import GetForecastsQuery, GetModelMetricsQuery
+from voltage_forecasting.domain.model.queries.ForecastingQueries import GetEvaluationQuery, GetForecastsQuery, GetModelMetricsQuery
 from voltage_forecasting.domain.repositories.AlertRuleRepository import AlertRuleRepository
 from voltage_forecasting.domain.repositories.ForecastRepository import ForecastRepository
 from voltage_forecasting.domain.repositories.TrainingRepository import TrainingRepository
@@ -43,6 +43,29 @@ class MetricsView:
     mae: float | None = None
     mape: float | None = None  # percentage
     r2: float | None = None
+
+
+@dataclass
+class EvaluationItem:
+    cell_id: int
+    cell_name: str
+    real: float
+    predicted: float
+    error_v: float  # |real - predicted|
+    error_pct: float  # |real - predicted| / real, in percent
+
+
+@dataclass
+class EvaluationView:
+    model: MlModel | None
+    retraining: bool
+    message: str | None
+    available_from: date | None = None
+    available_to: date | None = None
+    day: date | None = None
+    total_cells: int = 0  # cells with a measured voltage that day, not only the ones returned
+    mean_error_pct: float | None = None  # over all of them
+    items: list[EvaluationItem] = field(default_factory=list)
 
 
 class ForecastQueryServiceImpl:
@@ -103,4 +126,35 @@ class ForecastQueryServiceImpl:
         run = await self._repository.find_latest_success(model.id)
         if run and run.rmse is not None:
             view.mse, view.rmse, view.mae, view.mape, view.r2 = run.rmse ** 2, run.rmse, run.mae, run.mape, run.r2
+        return view
+
+    async def get_evaluation(self, query: GetEvaluationQuery) -> EvaluationView:
+        """
+        What the model forecast against what was measured on a day of its backtest (the last days of the data, which
+        it did not train on), with the cells that missed the most (or the least) first. The cells are cut to
+        `query.limit`; the totals are over all of them.
+        """
+        model = await self._repository.find_active_model()
+        retraining = await self._training_repo.exists_running()
+        if not model:
+            return EvaluationView(None, retraining, NO_MODEL_MESSAGE)
+        view = EvaluationView(model, retraining, RETRAINING_MESSAGE if retraining else None)
+        available = await self._repository.evaluation_date_range(model.id)
+        if not available:
+            return view
+        view.available_from, view.available_to = available
+        view.day = query.day or available[1]
+        if not available[0] <= view.day <= available[1]:
+            raise ValueError(f"There is no comparison for {view.day}; choose a date from {available[0]} to {available[1]}")
+
+        items = [
+            EvaluationItem(row.cell_id, name, row.real_value, row.predicted_value, abs(row.real_value - row.predicted_value),
+                           100 * abs(row.real_value - row.predicted_value) / abs(row.real_value))
+            for row, name in await self._repository.find_evaluation(model.id, view.day) if row.real_value
+        ]
+        view.total_cells = len(items)
+        if items:
+            view.mean_error_pct = sum(i.error_pct for i in items) / len(items)
+        items.sort(key=lambda i: i.error_pct, reverse=query.worst_first)
+        view.items = items[:query.limit]
         return view

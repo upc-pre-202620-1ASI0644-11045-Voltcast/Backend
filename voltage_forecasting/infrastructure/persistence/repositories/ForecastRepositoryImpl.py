@@ -1,10 +1,11 @@
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cell_management.domain.model.aggregates.Cell import Cell
 from voltage_forecasting.domain.model.aggregates.MlModel import MlModel
+from voltage_forecasting.domain.model.aggregates.ModelEvaluation import ModelEvaluation, ModelEvaluationResult
 from voltage_forecasting.domain.model.aggregates.Prediction import Prediction
 from voltage_forecasting.domain.model.aggregates.TrainingExecution import TrainingExecution, TrainingStatus
 
@@ -54,3 +55,27 @@ class ForecastRepositoryImpl:
             .order_by(TrainingExecution.id.desc()).limit(1)
         )
         return result.scalar_one_or_none()
+
+    async def evaluation_date_range(self, model_id: int) -> tuple[date, date] | None:
+        result = await self._session.execute(
+            select(func.min(ModelEvaluationResult.prediction_date), func.max(ModelEvaluationResult.prediction_date))
+            .join(ModelEvaluation, ModelEvaluation.id == ModelEvaluationResult.model_evaluation_id)
+            .where(ModelEvaluation.model_id == model_id)
+        )
+        first, last = result.one()
+        return (first.date(), last.date()) if first is not None else None
+
+    async def find_evaluation(self, model_id: int, day: date) -> list[tuple[ModelEvaluationResult, str]]:
+        start = datetime.combine(day, time.min)
+        result = await self._session.execute(
+            select(ModelEvaluationResult, Cell.name)
+            .join(ModelEvaluation, ModelEvaluation.id == ModelEvaluationResult.model_evaluation_id)
+            .join(Cell, Cell.id == ModelEvaluationResult.cell_id)
+            .where(
+                ModelEvaluation.model_id == model_id,
+                ModelEvaluationResult.prediction_date >= start,
+                ModelEvaluationResult.prediction_date < start + timedelta(days=1),
+                Cell.is_visible.is_(True),
+            )
+        )
+        return [(row, name) for row, name in result.all()]
