@@ -11,7 +11,12 @@ from voltage_forecasting.infrastructure.persistence.repositories.AlertRuleReposi
 from voltage_forecasting.infrastructure.persistence.repositories.ForecastRepositoryImpl import ForecastRepositoryImpl
 from voltage_forecasting.infrastructure.persistence.repositories.TrainingRepositoryImpl import TrainingRepositoryImpl
 from voltage_forecasting.interface.api.rest.assemblers.ForecastingResourceAssembler import ForecastingResourceAssembler
-from voltage_forecasting.interface.api.rest.resources.ForecastingResource import EvaluationResponse, ForecastResponse, MetricsResponse
+from voltage_forecasting.interface.api.rest.resources.ForecastingResource import (
+    EvaluationResponse,
+    EvaluationSeriesResponse,
+    ForecastResponse,
+    MetricsResponse,
+)
 
 router = APIRouter(prefix="/api/v1/forecasts", tags=["Voltage Forecasting"])
 
@@ -63,6 +68,23 @@ async def get_evaluation(
     try:
         query = ForecastingResourceAssembler.to_evaluation_query(day, limit, order == "worst")
         return ForecastingResourceAssembler.to_evaluation_response(await _service(db).get_evaluation(query))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+
+@router.get("/evaluation/series", response_model=EvaluationSeriesResponse, summary="Mean forecast error of every day of the model's backtest")
+async def get_evaluation_series(
+    date_from: date | None = Query(None, description="First day; defaults to available_from"),
+    date_to: date | None = Query(None, description="Last day; defaults to available_to"),
+    _: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """One point per day, with the same mean error that `/evaluation` reports for that day."""
+    try:
+        query = ForecastingResourceAssembler.to_evaluation_series_query(date_from, date_to)
+        return ForecastingResourceAssembler.to_evaluation_series_response(await _service(db).get_evaluation_series(query))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

@@ -1,12 +1,18 @@
 from datetime import date
 from dataclasses import asdict
 
-from voltage_forecasting.application.internal.queryservice.ForecastQueryServiceImpl import EvaluationView, ForecastView, MetricsView
+from voltage_forecasting.application.internal.queryservice.ForecastQueryServiceImpl import (
+    EvaluationSeriesView,
+    EvaluationView,
+    ForecastView,
+    MetricsView,
+)
 from voltage_forecasting.domain.model.aggregates.AlertRule import AlertRule
 from voltage_forecasting.domain.model.aggregates.TrainingExecution import TrainingExecution
 from voltage_forecasting.domain.model.commands.ForecastingCommands import RequestTrainingCommand, CreateAlertRuleCommand
 from voltage_forecasting.domain.model.queries.ForecastingQueries import (
     GetEvaluationQuery,
+    GetEvaluationSeriesQuery,
     GetForecastsQuery,
     GetModelMetricsQuery,
     GetTrainingByIdQuery,
@@ -17,6 +23,8 @@ from voltage_forecasting.interface.api.rest.resources.ForecastingResource import
     AlertRuleRequest,
     AlertRuleResponse,
     EvaluationResponse,
+    EvaluationSeriesPointResponse,
+    EvaluationSeriesResponse,
     ForecastResponse,
     MetricsResponse,
     TrainingRequest,
@@ -42,6 +50,10 @@ class ForecastingResourceAssembler:
     @staticmethod
     def to_evaluation_query(day: date | None, limit: int, worst_first: bool) -> GetEvaluationQuery:
         return GetEvaluationQuery(day=day, limit=limit, worst_first=worst_first)
+
+    @staticmethod
+    def to_evaluation_series_query(date_from: date | None, date_to: date | None) -> GetEvaluationSeriesQuery:
+        return GetEvaluationSeriesQuery(date_from=date_from, date_to=date_to)
 
     @staticmethod
     def to_metrics_query() -> GetModelMetricsQuery:
@@ -80,6 +92,17 @@ class ForecastingResourceAssembler:
         return MetricsResponse(
             model=view.model, retraining=view.retraining, message=view.message,
             mse=view.mse, rmse=view.rmse, mae=view.mae, mape=view.mape, r2=view.r2,
+        )
+
+    @staticmethod
+    def to_evaluation_series_response(view: EvaluationSeriesView) -> EvaluationSeriesResponse:
+        return EvaluationSeriesResponse(
+            model=view.model, retraining=view.retraining, message=view.message,
+            available_from=view.available_from, available_to=view.available_to,
+            items=[
+                EvaluationSeriesPointResponse(date=p.day, mean_error_pct=p.mean_error_pct, total_cells=p.total_cells)
+                for p in view.items
+            ],
         )
 
     @staticmethod

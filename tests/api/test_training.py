@@ -174,6 +174,31 @@ class TestEvaluationTable:  # US006: forecast against measured voltage, cell by 
         body = client.get(self.EVALUATION, headers=engineer_headers).json()
         assert body["model"] is None and body["items"] == [] and body["message"]
 
+    def test_the_series_has_a_point_per_day_equal_to_the_mean_error_of_that_day(self, client, engineer_headers):
+        self.trained(client, engineer_headers)
+        series = client.get(f"{self.EVALUATION}/series", headers=engineer_headers).json()
+        assert len(series["items"]) == config.BACKTEST_DAYS
+        assert (series["available_from"], series["available_to"]) == (series["items"][0]["date"], series["items"][-1]["date"])
+        point = series["items"][10]
+        assert point["total_cells"] == 5
+        day = client.get(self.EVALUATION, headers=engineer_headers, params={"date": point["date"]}).json()
+        assert point["mean_error_pct"] == pytest.approx(day["mean_error_pct"])
+
+    def test_the_series_can_be_cut_and_refuses_days_outside_the_backtest(self, client, engineer_headers):
+        self.trained(client, engineer_headers)
+        first = str(LAST_DAY - timedelta(days=config.BACKTEST_DAYS - 1))
+        cut = client.get(f"{self.EVALUATION}/series", headers=engineer_headers,
+                         params={"date_from": first, "date_to": str(LAST_DAY - timedelta(days=config.BACKTEST_DAYS - 3))}).json()
+        assert len(cut["items"]) == 3
+        outside = {"date_to": str(LAST_DAY + timedelta(days=1))}
+        assert client.get(f"{self.EVALUATION}/series", headers=engineer_headers, params=outside).status_code == 400
+        backwards = {"date_from": str(LAST_DAY), "date_to": first}
+        assert client.get(f"{self.EVALUATION}/series", headers=engineer_headers, params=backwards).status_code == 400
+
+    def test_the_series_says_so_when_there_is_no_trained_model(self, client, engineer_headers):
+        body = client.get(f"{self.EVALUATION}/series", headers=engineer_headers).json()
+        assert body["model"] is None and body["items"] == [] and body["message"]
+
 
 class TestTrainingThatCannotRun:
     def test_too_little_data_ends_as_failed_and_stays_visible(self, client, engineer_headers):

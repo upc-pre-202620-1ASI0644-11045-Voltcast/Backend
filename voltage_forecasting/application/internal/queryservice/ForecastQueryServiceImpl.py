@@ -2,7 +2,12 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 
 from voltage_forecasting.domain.model.aggregates.MlModel import MlModel
-from voltage_forecasting.domain.model.queries.ForecastingQueries import GetEvaluationQuery, GetForecastsQuery, GetModelMetricsQuery
+from voltage_forecasting.domain.model.queries.ForecastingQueries import (
+    GetEvaluationQuery,
+    GetEvaluationSeriesQuery,
+    GetForecastsQuery,
+    GetModelMetricsQuery,
+)
 from voltage_forecasting.domain.repositories.AlertRuleRepository import AlertRuleRepository
 from voltage_forecasting.domain.repositories.ForecastRepository import ForecastRepository
 from voltage_forecasting.domain.repositories.TrainingRepository import TrainingRepository
@@ -66,6 +71,23 @@ class EvaluationView:
     total_cells: int = 0  # cells with a measured voltage that day, not only the ones returned
     mean_error_pct: float | None = None  # over all of them
     items: list[EvaluationItem] = field(default_factory=list)
+
+
+@dataclass
+class EvaluationSeriesPoint:
+    day: date
+    mean_error_pct: float
+    total_cells: int
+
+
+@dataclass
+class EvaluationSeriesView:
+    model: MlModel | None
+    retraining: bool
+    message: str | None
+    available_from: date | None = None
+    available_to: date | None = None
+    items: list[EvaluationSeriesPoint] = field(default_factory=list)
 
 
 class ForecastQueryServiceImpl:
@@ -157,4 +179,34 @@ class ForecastQueryServiceImpl:
             view.mean_error_pct = sum(i.error_pct for i in items) / len(items)
         items.sort(key=lambda i: i.error_pct, reverse=query.worst_first)
         view.items = items[:query.limit]
+        return view
+
+    async def get_evaluation_series(self, query: GetEvaluationSeriesQuery) -> EvaluationSeriesView:
+        """
+        Mean error of every day of the backtest, measured like `get_evaluation` (same cells, same formula), so each
+        point equals the `mean_error_pct` of that day.
+        """
+        model = await self._repository.find_active_model()
+        retraining = await self._training_repo.exists_running()
+        if not model:
+            return EvaluationSeriesView(None, retraining, NO_MODEL_MESSAGE)
+        view = EvaluationSeriesView(model, retraining, RETRAINING_MESSAGE if retraining else None)
+        available = await self._repository.evaluation_date_range(model.id)
+        if not available:
+            return view
+        view.available_from, view.available_to = available
+        start, end = query.date_from or available[0], query.date_to or available[1]
+        if end < start:
+            raise ValueError("The end date cannot be before the start date")
+        if start < available[0] or end > available[1]:
+            raise ValueError(f"There is no comparison outside {available[0]} to {available[1]}")
+
+        # shortcut: grouped in Python over ~18 000 rows, move to SQL if the backtest grows far beyond that
+        by_day: dict[date, list[float]] = {}
+        rows = await self._repository.find_evaluation_range(
+            model.id, datetime.combine(start, time.min), datetime.combine(end + timedelta(days=1), time.min))
+        for day, real, predicted in rows:
+            if real:
+                by_day.setdefault(day.date(), []).append(100 * abs(real - predicted) / abs(real))
+        view.items = [EvaluationSeriesPoint(d, sum(e) / len(e), len(e)) for d, e in sorted(by_day.items())]
         return view

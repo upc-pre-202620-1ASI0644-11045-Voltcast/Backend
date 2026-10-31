@@ -23,3 +23,8 @@ class ForecastRepository(Protocol):
     async def find_evaluation(self, model_id: int, day: date) -> list[tuple[ModelEvaluationResult, str]]:
         """Forecast and measured voltage of every cell on a day of the backtest."""
         ...
+    async def find_evaluation_range(
+        self, model_id: int, start: datetime, end_exclusive: datetime
+    ) -> list[tuple[datetime, float, float]]:
+        """(day, measured, forecast) of every visible cell over a span of the backtest."""
+        ...
