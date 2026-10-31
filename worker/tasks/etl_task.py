@@ -8,7 +8,12 @@ from sqlalchemy import select
 from cell_management.domain.model.aggregates.Cell import Cell
 from dataset_management.domain.model.aggregates.UploadedDataset import DatasetStatus
 from dataset_management.infrastructure.persistence.repositories.DatasetRepositoryImpl import DatasetRepositoryImpl
+from iam.domain.model.aggregates.User import User  # noqa: F401  the table `executed_by` points to must be known
 from shared.infrastructure.persistence.configuration.database_configuration import AsyncSessionLocal
+from shared.infrastructure.queue.task_queue import get_task_queue
+from voltage_forecasting.application.internal.commandservice.TrainingCommandServiceImpl import TrainingCommandServiceImpl
+from voltage_forecasting.domain.model.commands.ForecastingCommands import RequestTrainingCommand
+from voltage_forecasting.infrastructure.persistence.repositories.TrainingRepositoryImpl import TrainingRepositoryImpl
 from worker.etl.excel import SchemaError, read_sections
 from worker.etl.pipeline import build_silver, raw_row_count
 
@@ -67,3 +72,15 @@ async def process_etl(message: dict, storage) -> None:
             await session.rollback()
             dataset.mark_failed("The file could not be processed; check it and upload it again")
         await repository.save(dataset)
+        if dataset.upload_status == DatasetStatus.READY:
+            await _request_training(session, repository, dataset.id)
+
+
+async def _request_training(session, dataset_repository, dataset_id: int) -> None:
+    """A cleaned file is trained on right away, as the system (no user). If it cannot be queued, the dataset stays ready and a person can request it."""
+    try:
+        service = TrainingCommandServiceImpl(TrainingRepositoryImpl(session), dataset_repository, get_task_queue())
+        execution = await service.request_training(RequestTrainingCommand(dataset_id=dataset_id, user_id=None))
+        logger.info("Training %s queued for dataset %s", execution.id, dataset_id)
+    except Exception:
+        logger.exception("Dataset %s is ready but its training was not queued", dataset_id)

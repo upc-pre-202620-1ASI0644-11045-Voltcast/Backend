@@ -55,6 +55,10 @@ def cleaned_dataset(client, headers, days=DAYS) -> int:
 
 
 def request_training(client, headers, dataset_id) -> dict:
+    """The training the ETL queued on its own, or a new one when that one already ran."""
+    queued = [t for t in client.get(TRAININGS, headers=headers).json() if t["dataset_id"] == dataset_id and t["status"] == "running"]
+    if queued:
+        return queued[0]
     response = client.post(TRAININGS, headers=headers, json={"dataset_id": dataset_id})
     assert response.status_code == 202, response.text
     return response.json()
