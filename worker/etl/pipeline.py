@@ -1,10 +1,11 @@
 from dataclasses import dataclass
+from datetime import date, datetime, timezone
 
 import pandas as pd
 
 from worker.etl import config
 from worker.etl.cleaning import calendar_from, daily_wide, finalize_long, silver_section, temporal_split
-from worker.etl.excel import SchemaError, SheetSchema
+from worker.etl.excel import DATE_COL, SchemaError, SheetSchema
 
 
 @dataclass
@@ -48,3 +49,51 @@ def build_silver(sections: dict[str, tuple[pd.DataFrame, SheetSchema]]) -> Silve
 
 def raw_row_count(sections: dict[str, tuple[pd.DataFrame, SheetSchema]]) -> int:
     return sum(len(df) for df, _ in sections.values())
+
+
+Sections = dict[str, tuple[pd.DataFrame, SheetSchema]]
+
+
+def date_range(sections: Sections) -> tuple[date, date]:
+    dates = pd.concat([df[DATE_COL].dt.normalize() for df, _ in sections.values()])
+    return dates.min().date(), dates.max().date()
+
+
+def check_not_future(sections: Sections) -> None:
+    """Records dated after today cannot be measurements: they are forecasts or made up."""
+    last = date_range(sections)[1]
+    today = datetime.now(timezone.utc).date()
+    if last > today:
+        raise SchemaError(f"The file has dates after today ({last}); only measured voltages can be uploaded")
+
+
+def merge_sections(files: list[Sections]) -> Sections:
+    """The raw rows of the files, oldest first, as one file: where two have the same day the later one wins (see daily_wide)."""
+    merged = files[0]
+    for sections in files[1:]:
+        if set(sections) != set(merged):
+            raise SchemaError(f"The sections of the file ({sorted(sections)}) differ from the ones it complements ({sorted(merged)})")
+        for el, (df, schema) in sections.items():
+            if schema.cell_cols != merged[el][1].cell_cols:
+                raise SchemaError(f"The cells of section {el} differ from the ones of the file it complements")
+        merged = {el: (pd.concat([merged[el][0], df], ignore_index=True), schema) for el, (df, schema) in sections.items()}
+    return merged
+
+
+def merge_preview(base: tuple[date, date], new: tuple[date, date]) -> dict:
+    """What merging a file that covers `new` into a dataset that covers `base` would do; raises SchemaError if it cannot be merged."""
+    gap = (new[0] - base[1]).days - 1
+    if new[1] <= base[1]:
+        raise SchemaError(f"The file adds no days after {base[1]}, the last day of the dataset it complements")
+    if gap > config.MAX_INTERP_DAYS:
+        raise SchemaError(f"There are {gap} days without records between {base[1]} and {new[0]}; at most {config.MAX_INTERP_DAYS} can be bridged")
+    days = (new[1] - min(base[0], new[0])).days + 1
+    if days < config.MIN_DAYS:
+        raise SchemaError(f"Merged, the files cover {days} days; at least {config.MIN_DAYS} are needed")
+    return {
+        "base": {"date_from": str(base[0]), "date_to": str(base[1])},
+        "new": {"date_from": str(new[0]), "date_to": str(new[1])},
+        "gap_days": max(gap, 0),
+        "overlap_days": max((base[1] - new[0]).days + 1, 0),
+        "merged_days": days,
+    }

@@ -43,7 +43,7 @@ def run_training(client) -> bool:
 
 
 DAYS = config.MIN_DAYS  # the least that can be validated
-LAST_DAY = date(2025, 1, 1) + timedelta(days=DAYS - 1)  # the synthetic workbooks start on 2025-01-01
+LAST_DAY = date(2020, 1, 1) + timedelta(days=DAYS - 1)  # the synthetic workbooks start on 2020-01-01
 
 
 def cleaned_dataset(client, headers, days=DAYS) -> int:

@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from dataset_management.domain.model.aggregates.UploadedDataset import UploadedDataset
+from dataset_management.domain.model.aggregates.UploadedDataset import DatasetStatus, UploadedDataset
 from dataset_management.domain.model.commands.DatasetCommands import UploadDatasetCommand
 from dataset_management.domain.repositories.DatasetRepository import DatasetRepository
 from shared.infrastructure.queue.task_queue import ETL_QUEUE
@@ -17,12 +17,17 @@ class DatasetCommandServiceImpl:
     async def upload_dataset(self, command: UploadDatasetCommand) -> UploadedDataset:
         """Stores the file as it came and queues its cleaning; the Job moves the dataset on from 'raw'."""
         filename = UploadedDataset.validate_upload(command.filename, command.content)
-        if await self._training_in_progress():
-            raise ValueError("A training is in progress; wait for it to finish before uploading a new file")
+        await self._ensure_no_training()
         # The stored name is generated: the name the user sent is only kept as a label.
         extension = filename[filename.rfind("."):].lower()
         path = await self._storage.save(f"raw/{uuid4().hex}{extension}", command.content)
-        dataset = await self._repository.save(UploadedDataset(filename=filename, storage_path=path))
+        if command.base_dataset_id is not None:
+            base = await self._repository.find_by_id(command.base_dataset_id)
+            if base is None or base.upload_status != DatasetStatus.READY:
+                raise ValueError("The dataset to complement does not exist or is not ready")
+        dataset = await self._repository.save(
+            UploadedDataset(filename=filename, storage_path=path, base_dataset_id=command.base_dataset_id)
+        )
         try:
             await self._queue.send(ETL_QUEUE, {"task": "etl", "dataset_id": dataset.id})
         except Exception:
@@ -30,3 +35,23 @@ class DatasetCommandServiceImpl:
             await self._repository.save(dataset)
             raise
         return dataset
+
+    async def confirm_merge(self, dataset_id: int) -> UploadedDataset:
+        """The user accepted the merge shown for the dataset: queues the second pass of the ETL."""
+        dataset = await self._repository.find_by_id(dataset_id)
+        if dataset is None:
+            raise LookupError("Dataset not found")
+        await self._ensure_no_training()
+        dataset.confirm_merge()
+        await self._repository.save(dataset)
+        try:
+            await self._queue.send(ETL_QUEUE, {"task": "etl", "dataset_id": dataset.id, "confirmed": True})
+        except Exception:
+            dataset.mark_failed("The processing task could not be queued; upload the file again")
+            await self._repository.save(dataset)
+            raise
+        return dataset
+
+    async def _ensure_no_training(self) -> None:
+        if await self._training_in_progress():
+            raise ValueError("A training is in progress; wait for it to finish before uploading a new file")

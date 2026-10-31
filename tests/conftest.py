@@ -41,6 +41,12 @@ async def _reset_database() -> None:
 
 
 @pytest.fixture(autouse=True)
+def small_workbooks(monkeypatch):
+    """The ETL asks for 900 days; the workbooks of the tests are small. The tests of that rule put it back."""
+    monkeypatch.setattr("worker.etl.config.MIN_DAYS", 10)
+
+
+@pytest.fixture(autouse=True)
 def empty_storage():
     """The uploaded files and the queued tasks live on disk, so every test starts without them."""
     shutil.rmtree(os.environ["LOCAL_STORAGE_DIR"], ignore_errors=True)

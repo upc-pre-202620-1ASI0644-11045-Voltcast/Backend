@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, HTTPException, Path, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dataset_management.application.internal.commandservice.DatasetCommandServiceImpl import DatasetCommandServiceImpl
@@ -58,17 +58,37 @@ async def get_dataset(
 @router.post("", response_model=DatasetResponse, status_code=201, summary="Upload a voltage history file")
 async def upload_dataset(
     file: UploadFile = File(...),
+    base_dataset_id: int | None = Form(None, description="A ready dataset this file complements; both are merged before cleaning once the user confirms"),
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
-    """Stores the Excel file and queues its cleaning; follow the progress with GET /datasets/{id}."""
+    """Stores the Excel file and queues its cleaning; follow the progress with GET /datasets/{id}. With base_dataset_id it waits in awaiting_confirmation until POST /datasets/{id}/confirm."""
     try:
         service = DatasetCommandServiceImpl(
             DatasetRepositoryImpl(db), get_file_storage(), get_task_queue(), TrainingRepositoryImpl(db).exists_running
         )
-        command = DatasetResourceAssembler.to_upload_command(file.filename or "", await file.read())
+        command = DatasetResourceAssembler.to_upload_command(file.filename or "", await file.read(), base_dataset_id)
         dataset = await service.upload_dataset(command)
         return DatasetResourceAssembler.to_response(dataset)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+
+@router.post("/{dataset_id}/confirm", response_model=DatasetResponse, status_code=202, summary="Accept the merge shown for a dataset")
+async def confirm_merge(
+    dataset_id: int = Path(...),
+    _: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    try:
+        service = DatasetCommandServiceImpl(
+            DatasetRepositoryImpl(db), get_file_storage(), get_task_queue(), TrainingRepositoryImpl(db).exists_running
+        )
+        return DatasetResourceAssembler.to_response(await service.confirm_merge(dataset_id))
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

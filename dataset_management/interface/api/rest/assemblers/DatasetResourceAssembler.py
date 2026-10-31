@@ -7,8 +7,8 @@ from dataset_management.interface.api.rest.resources.DatasetResource import Data
 class DatasetResourceAssembler:
 
     @staticmethod
-    def to_upload_command(filename: str, content: bytes) -> UploadDatasetCommand:
-        return UploadDatasetCommand(filename=filename, content=content)
+    def to_upload_command(filename: str, content: bytes, base_dataset_id: int | None = None) -> UploadDatasetCommand:
+        return UploadDatasetCommand(filename=filename, content=content, base_dataset_id=base_dataset_id)
 
     @staticmethod
     def to_get_by_id_query(dataset_id: int) -> GetDatasetByIdQuery:
