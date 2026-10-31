@@ -11,6 +11,7 @@ from iam.infrastructure.tokenservice.jwt.BearerTokenService import get_current_a
 from shared.infrastructure.persistence.configuration.database_configuration import get_db_session
 from shared.infrastructure.queue.task_queue import get_task_queue
 from shared.infrastructure.storage.file_storage import get_file_storage
+from voltage_forecasting.infrastructure.persistence.repositories.TrainingRepositoryImpl import TrainingRepositoryImpl
 
 router = APIRouter(prefix="/api/v1/datasets", tags=["Dataset Management"])
 
@@ -62,7 +63,9 @@ async def upload_dataset(
 ):
     """Stores the Excel file and queues its cleaning; follow the progress with GET /datasets/{id}."""
     try:
-        service = DatasetCommandServiceImpl(DatasetRepositoryImpl(db), get_file_storage(), get_task_queue())
+        service = DatasetCommandServiceImpl(
+            DatasetRepositoryImpl(db), get_file_storage(), get_task_queue(), TrainingRepositoryImpl(db).exists_running
+        )
         command = DatasetResourceAssembler.to_upload_command(file.filename or "", await file.read())
         dataset = await service.upload_dataset(command)
         return DatasetResourceAssembler.to_response(dataset)

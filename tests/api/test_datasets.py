@@ -29,6 +29,15 @@ class TestUploadDataset:  # US001
             assert "Unsupported file format" in response.json()["detail"]
         assert get_task_queue().pending(ETL_QUEUE) == []
 
+    def test_rejects_the_upload_while_a_training_is_in_progress(self, client, engineer_headers):
+        from tests.api.test_etl import run_etl, uploaded
+
+        uploaded(client, engineer_headers)
+        run_etl(client)  # the ETL queues the training of the cleaned file, which is now in progress
+        response = upload(client, engineer_headers)
+        assert response.status_code == 400 and "training is in progress" in response.json()["detail"]
+        assert get_task_queue().pending(ETL_QUEUE) == []
+
     def test_rejects_an_empty_file(self, client, engineer_headers):
         response = upload(client, engineer_headers, content=b"")
         assert response.status_code == 400 and "empty" in response.json()["detail"]

@@ -8,14 +8,17 @@ from shared.infrastructure.queue.task_queue import ETL_QUEUE
 
 class DatasetCommandServiceImpl:
 
-    def __init__(self, repository: DatasetRepository, storage, queue):
+    def __init__(self, repository: DatasetRepository, storage, queue, training_in_progress):
         self._repository = repository
+        self._training_in_progress = training_in_progress  # async () -> bool, so this module does not depend on forecasting
         self._storage = storage
         self._queue = queue
 
     async def upload_dataset(self, command: UploadDatasetCommand) -> UploadedDataset:
         """Stores the file as it came and queues its cleaning; the Job moves the dataset on from 'raw'."""
         filename = UploadedDataset.validate_upload(command.filename, command.content)
+        if await self._training_in_progress():
+            raise ValueError("A training is in progress; wait for it to finish before uploading a new file")
         # The stored name is generated: the name the user sent is only kept as a label.
         extension = filename[filename.rfind("."):].lower()
         path = await self._storage.save(f"raw/{uuid4().hex}{extension}", command.content)
