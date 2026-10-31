@@ -23,6 +23,12 @@ class GetEvaluationQuery:
 
 
 @dataclass(frozen=True)
+class GetEvaluationSeriesQuery:
+    date_from: date | None = None  # defaults to the first day of the backtest
+    date_to: date | None = None  # defaults to the last day of the backtest
+
+
+@dataclass(frozen=True)
 class GetTrainingByIdQuery:
     training_id: int
 

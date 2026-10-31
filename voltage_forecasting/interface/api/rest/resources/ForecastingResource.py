@@ -99,3 +99,18 @@ class EvaluationResponse(BaseModel):
     total_cells: int
     mean_error_pct: float | None
     items: list[EvaluationItemResponse]
+
+
+class EvaluationSeriesPointResponse(BaseModel):
+    date: date
+    mean_error_pct: float
+    total_cells: int
+
+
+class EvaluationSeriesResponse(BaseModel):
+    model: ModelVersionResponse | None
+    retraining: bool
+    message: str | None
+    available_from: date | None
+    available_to: date | None
+    items: list[EvaluationSeriesPointResponse]

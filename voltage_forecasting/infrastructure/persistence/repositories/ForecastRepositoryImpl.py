@@ -79,3 +79,19 @@ class ForecastRepositoryImpl:
             )
         )
         return [(row, name) for row, name in result.all()]
+
+    async def find_evaluation_range(
+        self, model_id: int, start: datetime, end_exclusive: datetime
+    ) -> list[tuple[datetime, float, float]]:
+        result = await self._session.execute(
+            select(ModelEvaluationResult.prediction_date, ModelEvaluationResult.real_value, ModelEvaluationResult.predicted_value)
+            .join(ModelEvaluation, ModelEvaluation.id == ModelEvaluationResult.model_evaluation_id)
+            .join(Cell, Cell.id == ModelEvaluationResult.cell_id)
+            .where(
+                ModelEvaluation.model_id == model_id,
+                ModelEvaluationResult.prediction_date >= start,
+                ModelEvaluationResult.prediction_date < end_exclusive,
+                Cell.is_visible.is_(True),
+            )
+        )
+        return [tuple(row) for row in result.all()]
