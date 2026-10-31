@@ -14,6 +14,6 @@ class DatasetResponse(BaseModel):
     processed_row_count: int
     base_dataset_id: int | None
     created_at: datetime
-    summary: dict | None = None  # ready: cells per section, new cells and covered dates; awaiting_confirmation: new and base date ranges, gap and overlap
+    summary: dict | None = None  # ready: cells per section, new cells, covered dates and, except for files processed before they existed, the cleaning counts of the uploaded file alone (rows_read = rows_sorted + duplicates_removed + discarded_rows; discarded_columns); awaiting_confirmation: new and base date ranges, gap and overlap
 
     model_config = {"from_attributes": True}

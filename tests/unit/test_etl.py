@@ -3,7 +3,7 @@ import pytest
 
 from tests.excel_files import section_rows, workbook_bytes
 from worker.etl.excel import SchemaError, read_sections, section_of
-from worker.etl.pipeline import build_silver
+from worker.etl.pipeline import build_silver, cleaning_counts
 
 
 def silver_of(sheets: dict[str, list[list]]):
@@ -64,6 +64,20 @@ class TestReadSections:  # US002, US003
     def test_rejects_a_file_that_is_not_a_workbook(self):
         with pytest.raises(SchemaError, match="not a valid Excel workbook"):
             read_sections(b"this is not an excel file")
+
+
+class TestCleaningCounts:  # US004, TS008
+    def test_counts_duplicates_undated_rows_and_extra_columns(self):
+        rows = section_rows(days=12, cells=[1], extra_columns=("Average", "Comments"))
+        rows.append([rows[4][0], 3.0, 12.0, 3.5, "x", "x"])  # a repeated day
+        rows.append([rows[5][0], 3.0, 12.0, 3.5, "x", "x"])  # another one
+        rows.append([None, 3.0, 12.0, 3.5, "x", "x"])  # voltage data without a date
+        counts = cleaning_counts(read_sections(workbook_bytes({"EL A": rows, "EL B": section_rows(days=12, cells=[1])})))
+        assert counts == {"rows_read": 27, "rows_sorted": 24, "duplicates_removed": 2, "discarded_rows": 1, "discarded_columns": 2}
+
+    def test_a_clean_file_discards_nothing(self):
+        counts = cleaning_counts(read_sections(workbook_bytes({"EL A": section_rows(days=12)})))
+        assert counts == {"rows_read": 12, "rows_sorted": 12, "duplicates_removed": 0, "discarded_rows": 0, "discarded_columns": 0}
 
 
 class TestBuildSilver:  # US004

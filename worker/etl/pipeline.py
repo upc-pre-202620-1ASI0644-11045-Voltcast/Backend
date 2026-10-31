@@ -54,6 +54,23 @@ def raw_row_count(sections: dict[str, tuple[pd.DataFrame, SheetSchema]]) -> int:
 Sections = dict[str, tuple[pd.DataFrame, SheetSchema]]
 
 
+def cleaning_counts(sections: Sections) -> dict:
+    """
+    What cleaning did to the records of a file (US004, TS008). Always rows_read = rows_sorted + duplicates_removed + discarded_rows.
+    Call it with the file as uploaded, not with a merge, so the numbers describe that file only.
+    """
+    discarded = sum(schema.rows_without_date for _, schema in sections.values())
+    kept = sum(df[DATE_COL].dt.normalize().nunique() for df, _ in sections.values())
+    read = raw_row_count(sections) + discarded
+    return {
+        "rows_read": read,
+        "rows_sorted": kept,
+        "duplicates_removed": read - discarded - kept,
+        "discarded_rows": discarded,
+        "discarded_columns": sum(schema.discarded_columns for _, schema in sections.values()),
+    }
+
+
 def date_range(sections: Sections) -> tuple[date, date]:
     dates = pd.concat([df[DATE_COL].dt.normalize() for df, _ in sections.values()])
     return dates.min().date(), dates.max().date()
