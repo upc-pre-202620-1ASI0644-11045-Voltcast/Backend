@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import Enum
 from pathlib import PurePath
 
-from sqlalchemy import String, Text, Integer, TIMESTAMP, text
+from sqlalchemy import ForeignKey, String, Text, Integer, TIMESTAMP, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,6 +16,7 @@ MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 class DatasetStatus(str, Enum):
     RAW = "raw"
     CLEANING = "cleaning"
+    AWAITING_CONFIRMATION = "awaiting_confirmation"  # a file that complements another one, waiting for the user to accept the merge
     READY = "ready"
     FAILED = "failed"
 
@@ -24,6 +25,7 @@ class UploadedDataset(Base):
     """
     Aggregate Root: Archivo histórico de voltajes cargado por el Ingeniero de Planta.
     Flujo de estado: raw -> cleaning -> ready | failed (lo avanza el Job de ETL).
+    Un archivo que complementa a otro (base_dataset_id): raw -> cleaning -> awaiting_confirmation -> (confirma) raw -> cleaning -> ready | failed.
     """
     __tablename__ = "uploaded_dataset"
 
@@ -40,6 +42,9 @@ class UploadedDataset(Base):
     row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
     processed_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
     processed_row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    base_dataset_id: Mapped[int | None] = mapped_column(
+        SmallInt, ForeignKey("uploaded_dataset.id"), nullable=True
+    )  # the dataset this file complements: its raw data is merged with this one before cleaning
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP, nullable=False, server_default=text("CURRENT_TIMESTAMP")
     )
@@ -62,6 +67,14 @@ class UploadedDataset(Base):
     def start_cleaning(self) -> None:
         self.upload_status = DatasetStatus.CLEANING
         self.error_message = None
+
+    def await_confirmation(self) -> None:
+        self.upload_status = DatasetStatus.AWAITING_CONFIRMATION
+
+    def confirm_merge(self) -> None:
+        if self.upload_status != DatasetStatus.AWAITING_CONFIRMATION:
+            raise ValueError(f"The dataset is not waiting for confirmation (status: {self.upload_status.value})")
+        self.upload_status = DatasetStatus.RAW
 
     def mark_ready(self, processed_path: str, row_count: int, processed_row_count: int) -> None:
         self.upload_status = DatasetStatus.READY

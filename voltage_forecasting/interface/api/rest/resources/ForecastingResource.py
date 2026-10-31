@@ -78,3 +78,24 @@ class MetricsResponse(BaseModel):
     mae: float | None
     mape: float | None
     r2: float | None
+
+
+class EvaluationItemResponse(BaseModel):
+    cell_id: int
+    cell_name: str
+    real: float
+    predicted: float
+    error_v: float
+    error_pct: float
+
+
+class EvaluationResponse(BaseModel):
+    model: ModelVersionResponse | None
+    retraining: bool
+    message: str | None
+    available_from: date | None
+    available_to: date | None
+    date: date | None
+    total_cells: int
+    mean_error_pct: float | None
+    items: list[EvaluationItemResponse]

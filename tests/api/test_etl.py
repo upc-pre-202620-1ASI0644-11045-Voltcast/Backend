@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from shared.infrastructure.queue.task_queue import ETL_QUEUE, get_task_queue
+from shared.infrastructure.queue.task_queue import ETL_QUEUE, TRAINING_QUEUE, get_task_queue
 from tests.api.test_cells import CELLS, create_cell
 from tests.api.test_datasets import DATASETS, upload
 from tests.conftest import API
@@ -55,11 +55,12 @@ class TestCleanDataset:  # US001-US004
         assert {c["id"] for c in cells if c["name"] == "A1"} == {existing["id"]}  # reused, not duplicated
         assert not any(c["is_active"] for c in cells)  # active only with a cathode and an anode
 
-    def test_a_cleaned_dataset_can_be_used_to_train(self, client, engineer_headers):
+    def test_a_cleaned_dataset_is_queued_for_training_by_itself(self, client, engineer_headers):
         dataset_id = uploaded(client, engineer_headers)
         run_etl(client)
-        response = client.post(f"{API}/trainings", headers=engineer_headers, json={"dataset_id": dataset_id})
-        assert response.status_code == 202
+        runs = client.get(f"{API}/trainings", headers=engineer_headers).json()
+        assert [(r["dataset_id"], r["status"], r["executed_by"]) for r in runs] == [(dataset_id, "running", None)]
+        assert get_task_queue().pending(TRAINING_QUEUE) == [{"task": "training", "training_execution_id": runs[0]["id"]}]
 
 
 class TestRejectDataset:  # US002-E02, US003-E02

@@ -11,7 +11,7 @@ from voltage_forecasting.infrastructure.persistence.repositories.AlertRuleReposi
 from voltage_forecasting.infrastructure.persistence.repositories.ForecastRepositoryImpl import ForecastRepositoryImpl
 from voltage_forecasting.infrastructure.persistence.repositories.TrainingRepositoryImpl import TrainingRepositoryImpl
 from voltage_forecasting.interface.api.rest.assemblers.ForecastingResourceAssembler import ForecastingResourceAssembler
-from voltage_forecasting.interface.api.rest.resources.ForecastingResource import ForecastResponse, MetricsResponse
+from voltage_forecasting.interface.api.rest.resources.ForecastingResource import EvaluationResponse, ForecastResponse, MetricsResponse
 
 router = APIRouter(prefix="/api/v1/forecasts", tags=["Voltage Forecasting"])
 
@@ -47,5 +47,23 @@ async def get_model_metrics(
     try:
         view = await _service(db).get_model_metrics(ForecastingResourceAssembler.to_metrics_query())
         return ForecastingResourceAssembler.to_metrics_response(view)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+
+@router.get("/evaluation", response_model=EvaluationResponse, summary="Forecast against measured voltage on a day of the model's backtest")
+async def get_evaluation(
+    day: date | None = Query(None, alias="date", description="A day of the backtest (see available_from / available_to); defaults to the latest"),
+    limit: int = Query(10, ge=1, le=300, description="How many cells to return; use 300 to get all of them"),
+    order: str = Query("worst", pattern="^(worst|best)$", description="worst: the cells with the largest error first; best: the smallest first"),
+    _: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Compares, per cell, what the model forecast with what was measured over the last days of the data."""
+    try:
+        query = ForecastingResourceAssembler.to_evaluation_query(day, limit, order == "worst")
+        return ForecastingResourceAssembler.to_evaluation_response(await _service(db).get_evaluation(query))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")

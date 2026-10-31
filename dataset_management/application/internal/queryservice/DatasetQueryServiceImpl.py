@@ -19,11 +19,12 @@ class DatasetQueryServiceImpl:
         return await self._repository.find_all()
 
     async def get_summary(self, dataset: UploadedDataset) -> dict | None:
-        """What the cleaning found in a ready dataset: cells per section and covered dates (US003)."""
-        if dataset.upload_status != DatasetStatus.READY or not dataset.processed_path:
-            return None
+        """Ready: what the cleaning found, cells per section and covered dates (US003). Awaiting confirmation: what the merge would do."""
         try:
-            path = str(PurePosixPath(dataset.processed_path).with_name("summary.json"))
-            return json.loads(await self._storage.read(path))
+            if dataset.upload_status == DatasetStatus.READY and dataset.processed_path:
+                return json.loads(await self._storage.read(str(PurePosixPath(dataset.processed_path).with_name("summary.json"))))
+            if dataset.upload_status == DatasetStatus.AWAITING_CONFIRMATION:
+                return json.loads(await self._storage.read(f"processed/{dataset.id}/merge.json"))
         except FileNotFoundError:
-            return None
+            pass
+        return None

@@ -5,12 +5,13 @@ from io import BytesIO
 import openpyxl
 
 
-def section_rows(days: int = 30, cells: list[int] | None = None, extra_columns: tuple[str, ...] = ()) -> list[list]:
+def section_rows(days: int = 30, cells: list[int] | None = None, extra_columns: tuple[str, ...] = (),
+                 start: datetime = datetime(2026, 1, 1)) -> list[list]:
     """Header + one row per day: Date, [Volts], [kA], one column per cell number, then any extra columns."""
     cells = cells or [1, 2, 3]
     rows = [["Date", "[Volts]", "[kA]", *cells, *extra_columns]]
     for day in range(days):
-        rows.append([datetime(2026, 1, 1) + timedelta(days=day), 3.0 * len(cells), 12.0,
+        rows.append([start + timedelta(days=day), 3.0 * len(cells), 12.0,
                      *(3.0 + 0.001 * n for n in cells), *("x" for _ in extra_columns)])
     return rows
 
@@ -39,5 +40,5 @@ def varying_rows(days: int = 520, cells: list[int] | None = None, seed: int = 0)
     rows = [["Date", "[Volts]", "[kA]", *cells]]
     for day in range(days):
         volts = [float(level[day] + 0.01 * n + rng.normal(0, 0.004)) for n in cells]
-        rows.append([datetime(2025, 1, 1) + timedelta(days=day), sum(volts), float(ka[day]), *volts])
+        rows.append([datetime(2020, 1, 1) + timedelta(days=day), sum(volts), float(ka[day]), *volts])
     return rows

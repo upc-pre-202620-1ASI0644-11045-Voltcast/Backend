@@ -43,7 +43,7 @@ def run_training(client) -> bool:
 
 
 DAYS = config.MIN_DAYS  # the least that can be validated
-LAST_DAY = date(2025, 1, 1) + timedelta(days=DAYS - 1)  # the synthetic workbooks start on 2025-01-01
+LAST_DAY = date(2020, 1, 1) + timedelta(days=DAYS - 1)  # the synthetic workbooks start on 2020-01-01
 
 
 def cleaned_dataset(client, headers, days=DAYS) -> int:
@@ -55,6 +55,10 @@ def cleaned_dataset(client, headers, days=DAYS) -> int:
 
 
 def request_training(client, headers, dataset_id) -> dict:
+    """The training the ETL queued on its own, or a new one when that one already ran."""
+    queued = [t for t in client.get(TRAININGS, headers=headers).json() if t["dataset_id"] == dataset_id and t["status"] == "running"]
+    if queued:
+        return queued[0]
     response = client.post(TRAININGS, headers=headers, json={"dataset_id": dataset_id})
     assert response.status_code == 202, response.text
     return response.json()
@@ -125,6 +129,50 @@ class TestTrainModel:  # US005, US006
         client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": 1.0})  # below any real voltage
         items = client.get(FORECASTS, headers=engineer_headers).json()["items"]
         assert items and all(i["exceeds"] for i in items)
+
+
+class TestEvaluationTable:  # US006: forecast against measured voltage, cell by cell
+    EVALUATION = f"{FORECASTS}/evaluation"
+
+    def trained(self, client, headers):
+        request_training(client, headers, cleaned_dataset(client, headers))
+        run_training(client)
+
+    def test_compares_every_cell_on_the_latest_day_of_the_backtest(self, client, engineer_headers):
+        self.trained(client, engineer_headers)
+        body = client.get(self.EVALUATION, headers=engineer_headers).json()
+        assert (body["available_from"], body["available_to"]) == (
+            str(LAST_DAY - timedelta(days=config.BACKTEST_DAYS - 1)), str(LAST_DAY))
+        assert body["date"] == str(LAST_DAY) and body["total_cells"] == 5 and len(body["items"]) == 5
+        for item in body["items"]:
+            assert item["error_v"] == pytest.approx(abs(item["real"] - item["predicted"]))
+            assert item["error_pct"] == pytest.approx(100 * item["error_v"] / item["real"])
+        assert body["mean_error_pct"] == pytest.approx(sum(i["error_pct"] for i in body["items"]) / 5)
+
+    def test_returns_the_cells_with_the_largest_error_first_or_the_smallest(self, client, engineer_headers):
+        self.trained(client, engineer_headers)
+        worst = client.get(self.EVALUATION, headers=engineer_headers, params={"limit": 3}).json()
+        best = client.get(self.EVALUATION, headers=engineer_headers, params={"limit": 3, "order": "best"}).json()
+        everything = [i["error_pct"] for i in client.get(self.EVALUATION, headers=engineer_headers, params={"limit": 300}).json()["items"]]
+        assert [i["error_pct"] for i in worst["items"]] == sorted(everything, reverse=True)[:3]
+        assert [i["error_pct"] for i in best["items"]] == sorted(everything)[:3]
+        assert worst["total_cells"] == best["total_cells"] == 5 and worst["mean_error_pct"] == best["mean_error_pct"]
+
+    def test_a_day_of_the_backtest_can_be_chosen(self, client, engineer_headers):
+        self.trained(client, engineer_headers)
+        day = str(LAST_DAY - timedelta(days=10))
+        assert client.get(self.EVALUATION, headers=engineer_headers, params={"date": day}).json()["date"] == day
+
+    def test_a_day_without_comparison_is_refused_with_the_available_range(self, client, engineer_headers):
+        self.trained(client, engineer_headers)
+        response = client.get(self.EVALUATION, headers=engineer_headers, params={"date": str(LAST_DAY + timedelta(days=1))})
+        assert response.status_code == 400 and str(LAST_DAY) in response.json()["detail"]
+        assert client.get(self.EVALUATION, headers=engineer_headers, params={"limit": 301}).status_code == 422
+        assert client.get(self.EVALUATION, headers=engineer_headers, params={"order": "up"}).status_code == 422
+
+    def test_says_so_when_there_is_no_trained_model(self, client, engineer_headers):
+        body = client.get(self.EVALUATION, headers=engineer_headers).json()
+        assert body["model"] is None and body["items"] == [] and body["message"]
 
 
 class TestTrainingThatCannotRun:
