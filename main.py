@@ -13,6 +13,7 @@ from iam.interface.api.rest.controllers.UserController import router as user_rou
 from cell_management.interface.api.rest.controllers.CellController import router as cell_router
 from cell_management.interface.api.rest.controllers.ComponentController import router as component_router
 from cell_management.infrastructure.persistence.schema_sync import sync_cell_management_schema
+from dataset_management.infrastructure.persistence.schema_sync import sync_dataset_management_schema
 from dataset_management.interface.api.rest.controllers.DatasetController import router as dataset_router
 from voltage_forecasting.interface.api.rest.controllers.ForecastController import router as forecast_router
 from voltage_forecasting.interface.api.rest.controllers.TrainingController import router as training_router
@@ -66,6 +67,7 @@ async def lifespan(_: FastAPI):
     await init_db()
     async with engine.begin() as connection:
         await sync_cell_management_schema(connection)
+        await sync_dataset_management_schema(connection)
     await seed_roles()
     await seed_supervisor()
     yield

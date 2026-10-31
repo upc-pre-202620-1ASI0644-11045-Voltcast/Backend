@@ -43,7 +43,7 @@ def run_training(client) -> bool:
 
 
 DAYS = config.MIN_DAYS  # the least that can be validated
-LAST_DAY = date(2025, 1, 1) + timedelta(days=DAYS - 1)  # the synthetic workbooks start on 2025-01-01
+LAST_DAY = date(2020, 1, 1) + timedelta(days=DAYS - 1)  # the synthetic workbooks start on 2020-01-01
 
 
 def cleaned_dataset(client, headers, days=DAYS) -> int:
@@ -55,6 +55,10 @@ def cleaned_dataset(client, headers, days=DAYS) -> int:
 
 
 def request_training(client, headers, dataset_id) -> dict:
+    """The training the ETL queued on its own, or a new one when that one already ran."""
+    queued = [t for t in client.get(TRAININGS, headers=headers).json() if t["dataset_id"] == dataset_id and t["status"] == "running"]
+    if queued:
+        return queued[0]
     response = client.post(TRAININGS, headers=headers, json={"dataset_id": dataset_id})
     assert response.status_code == 202, response.text
     return response.json()
