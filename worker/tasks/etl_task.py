@@ -18,7 +18,7 @@ from voltage_forecasting.domain.model.commands.ForecastingCommands import Reques
 from voltage_forecasting.infrastructure.persistence.repositories.TrainingRepositoryImpl import TrainingRepositoryImpl
 from worker.etl.excel import SchemaError, read_sections
 from worker.etl.pipeline import (
-    build_silver, check_not_future, date_range, merge_preview, merge_sections, raw_row_count,
+    build_silver, check_not_future, cleaning_counts, date_range, merge_preview, merge_sections, raw_row_count,
 )
 
 logger = logging.getLogger(__name__)
@@ -88,7 +88,7 @@ async def process_etl(message: dict, storage) -> None:
             await storage.save(f"{folder}/split.json", json.dumps(result.split).encode())
             created = await _ensure_cells(session, result.cell_names)
             await storage.save(
-                f"{folder}/summary.json", json.dumps({**result.summary, "new_cells": created}).encode()
+                f"{folder}/summary.json", json.dumps({**result.summary, **cleaning_counts(new), "new_cells": created}).encode()
             )
             dataset.mark_ready(silver_path, raw_row_count(sections), len(result.silver))
             logger.info("Dataset %s ready: %s (%s new cells)", dataset.id, result.summary, created)

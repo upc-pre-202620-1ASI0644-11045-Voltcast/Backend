@@ -23,6 +23,8 @@ class SchemaError(ValueError):
 @dataclass
 class SheetSchema:
     cell_cols: list[str]  # header numbers of the cell columns, as text ("1", "2", ...)
+    discarded_columns: int = 0  # columns that are not date, voltage, current or cell
+    rows_without_date: int = 0  # records dropped because their date is empty
 
 
 def section_of(sheet_name: str) -> str | None:
@@ -69,7 +71,7 @@ def detect_schema(df: pd.DataFrame, sheet: str) -> SheetSchema:
         raise SchemaError(f"Sheet '{sheet}' has voltage or current columns with non-numeric values: {non_numeric[:10]}")
     if not pd.api.types.is_datetime64_any_dtype(df[DATE_COL]):
         raise SchemaError(f"The column '{DATE_COL}' of sheet '{sheet}' does not contain dates")
-    return SheetSchema(cell_cols)
+    return SheetSchema(cell_cols, discarded_columns=len(cols) - 3 - len(cell_cols))
 
 
 def read_sections(content: bytes) -> dict[str, tuple[pd.DataFrame, SheetSchema]]:
@@ -88,7 +90,9 @@ def read_sections(content: bytes) -> dict[str, tuple[pd.DataFrame, SheetSchema]]
                 raise SchemaError(f"Section {section} appears in more than one sheet")
             df = _read_sheet(workbook[name])
             schema = detect_schema(df, name)
-            sections[section] = (df.dropna(subset=[DATE_COL]), schema)
+            dated = df.dropna(subset=[DATE_COL])
+            schema.rows_without_date = len(df) - len(dated)
+            sections[section] = (dated, schema)
         if not sections:
             raise SchemaError(
                 f"No sheet identifies an electrical section (for example 'EL A' or 'Sección A'). Sheets found: {workbook.sheetnames}"

@@ -46,6 +46,13 @@ class TestCleanDataset:  # US001-US004
         assert summary["sections"] == {"A": 3, "B": 2} and summary["n_cells"] == 5
         assert (summary["date_from"], summary["date_to"], summary["new_cells"]) == ("2026-01-01", "2026-01-30", 5)
 
+    def test_reports_the_cleaning_counts(self, client, engineer_headers):  # US004, TS008
+        dataset_id = uploaded(client, engineer_headers)
+        run_etl(client)
+        summary = dataset(client, engineer_headers, dataset_id)["summary"]
+        assert {k: summary[k] for k in ("rows_read", "rows_sorted", "duplicates_removed", "discarded_rows")} == {
+            "rows_read": 60, "rows_sorted": 60, "duplicates_removed": 0, "discarded_rows": 0}
+
     def test_registers_the_cells_that_do_not_exist_yet(self, client, engineer_headers):
         existing = create_cell(client, engineer_headers, "A1")
         uploaded(client, engineer_headers)
