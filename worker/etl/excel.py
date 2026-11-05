@@ -1,11 +1,13 @@
-"""Reads the uploaded workbook: finds the electrical sections, the columns and the cells (US001-US003)."""
+"""Reads the uploaded workbook (.xlsx, .xlsm, .xls): finds the electrical sections, the columns and the cells (US001-US003)."""
 import re
+import struct
 from dataclasses import dataclass
 from io import BytesIO
 from zipfile import BadZipFile
 
 import openpyxl
 import pandas as pd
+import xlrd
 from openpyxl.utils.exceptions import InvalidFileException
 
 DATE_COL = "Date"
@@ -40,11 +42,12 @@ def _header_to_text(value) -> str:
     return str(value).strip()
 
 
-def _read_sheet(worksheet) -> pd.DataFrame:
-    rows = worksheet.iter_rows(values_only=True)
+def _frame(title: str, rows) -> pd.DataFrame:
+    """Header + data rows (tuples of cell values) -> DataFrame; the same for every format."""
+    rows = iter(rows)
     header = next(rows, None)
     if header is None:
-        raise SchemaError(f"Sheet '{worksheet.title}' is empty")
+        raise SchemaError(f"Sheet '{title}' is empty")
     data = [r for r in rows if any(v is not None for v in r)]
     df = pd.DataFrame(data, columns=[_header_to_text(h) for h in header])
     # Columns without a header and completely empty are the borders of the sheet.
@@ -74,29 +77,60 @@ def detect_schema(df: pd.DataFrame, sheet: str) -> SheetSchema:
     return SheetSchema(cell_cols, discarded_columns=len(cols) - 3 - len(cell_cols))
 
 
-def read_sections(content: bytes) -> dict[str, tuple[pd.DataFrame, SheetSchema]]:
-    """Section letter -> (rows, schema) for every sheet whose name identifies a section. Other sheets are ignored."""
+def _finish(frames) -> dict[str, tuple[pd.DataFrame, SheetSchema]]:
+    """(section, sheet name, rows) -> section -> (dated rows, schema); the checks are the same for every format."""
+    sections: dict[str, tuple[pd.DataFrame, SheetSchema]] = {}
+    for section, name, df in frames:
+        if section in sections:
+            raise SchemaError(f"Section {section} appears in more than one sheet")
+        schema = detect_schema(df, name)
+        dated = df.dropna(subset=[DATE_COL])
+        schema.rows_without_date = len(df) - len(dated)
+        sections[section] = (dated, schema)
+    return sections
+
+
+def _workbook_sections(names: list[str], rows_of) -> dict[str, tuple[pd.DataFrame, SheetSchema]]:
+    """Every sheet whose name identifies a section; other sheets are ignored."""
+    frames = ((section_of(n), n, _frame(n, rows_of(n))) for n in names if section_of(n) is not None)
+    sections = _finish(frames)
+    if not sections:
+        raise SchemaError(f"No sheet identifies an electrical section (for example 'EL A' or 'Sección A'). Sheets found: {names}")
+    return sections
+
+
+def _xls_rows(sheet):
+    for r in range(sheet.nrows):
+        row = []
+        for cell in sheet.row(r):
+            if cell.ctype == xlrd.XL_CELL_DATE:
+                row.append(xlrd.xldate.xldate_as_datetime(cell.value, sheet.book.datemode))
+            elif cell.ctype in (xlrd.XL_CELL_EMPTY, xlrd.XL_CELL_BLANK, xlrd.XL_CELL_ERROR) or cell.value == "":
+                row.append(None)
+            else:
+                row.append(cell.value)
+        yield tuple(row)
+
+
+def _read_xls(content: bytes):
+    try:
+        book = xlrd.open_workbook(file_contents=content)
+        # Corrupt files can fail while a sheet is read, so read them all inside the try.
+        rows = {n: list(_xls_rows(book.sheet_by_name(n))) for n in book.sheet_names()}
+    except (xlrd.XLRDError, struct.error, IndexError, KeyError, AssertionError, ValueError, OSError) as error:
+        raise SchemaError("The file is not a valid Excel workbook") from error
+    return _workbook_sections(list(rows), rows.__getitem__)
+
+
+def read_sections(content: bytes, extension: str = ".xlsx") -> dict[str, tuple[pd.DataFrame, SheetSchema]]:
+    """Section letter -> (rows, schema), one sheet per section."""
+    if extension.lower() == ".xls":
+        return _read_xls(content)
     try:
         workbook = openpyxl.load_workbook(BytesIO(content), read_only=True, data_only=True)
     except (BadZipFile, InvalidFileException, KeyError, OSError) as error:
         raise SchemaError("The file is not a valid Excel workbook") from error
-    sections: dict[str, tuple[pd.DataFrame, SheetSchema]] = {}
     try:
-        for name in workbook.sheetnames:
-            section = section_of(name)
-            if section is None:
-                continue
-            if section in sections:
-                raise SchemaError(f"Section {section} appears in more than one sheet")
-            df = _read_sheet(workbook[name])
-            schema = detect_schema(df, name)
-            dated = df.dropna(subset=[DATE_COL])
-            schema.rows_without_date = len(df) - len(dated)
-            sections[section] = (dated, schema)
-        if not sections:
-            raise SchemaError(
-                f"No sheet identifies an electrical section (for example 'EL A' or 'Sección A'). Sheets found: {workbook.sheetnames}"
-            )
+        return _workbook_sections(workbook.sheetnames, lambda n: workbook[n].iter_rows(values_only=True))
     finally:
         workbook.close()
-    return sections
