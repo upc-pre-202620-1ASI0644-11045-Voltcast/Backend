@@ -1,10 +1,10 @@
-"""Usage: python -m worker etl | training"""
+"""Usage: python -m worker etl | training | notifications"""
 import argparse
 import asyncio
 import logging
 
 from shared.infrastructure.persistence.configuration.database_configuration import close_db
-from worker.main import TASKS, run
+from worker.main import SCHEDULED, TASKS, run
 
 
 async def main(task: str) -> None:
@@ -16,6 +16,6 @@ async def main(task: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Runs one execution of a heavy task")
-    parser.add_argument("task", choices=sorted(TASKS))
+    parser.add_argument("task", choices=sorted([*TASKS, *SCHEDULED]))
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     asyncio.run(main(parser.parse_args().task))

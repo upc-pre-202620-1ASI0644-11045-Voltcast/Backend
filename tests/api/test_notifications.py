@@ -66,3 +66,27 @@ class TestAccountReview:  # US029, US030
         register(client, "other@voltcast.com")  # any later event sends the pending ones first
         assert (EMAIL, "Tu cuenta fue aceptada") in sent_emails
         assert NotificationStatus.PENDING not in statuses(client)
+
+
+class TestScheduledDispatch:  # US029, US030 E02: the scheduled Job sends what stayed pending
+    def test_the_notifications_task_sends_the_pending_emails(self, client, supervisor_headers, sent_emails, monkeypatch):
+        from worker.main import run
+
+        user_id = register(client).json()["id"]
+
+        async def offline(to, subject, body_html):
+            raise ConnectionError("no connection")
+
+        online = "shared.infrastructure.email.email_client.send_email"
+        monkeypatch.setattr(online, offline)
+        review(client, supervisor_headers, user_id, "approve")
+        assert statuses(client)[-1] == NotificationStatus.PENDING
+
+        async def back_online(to, subject, body_html):
+            sent_emails.append((to, subject))
+
+        monkeypatch.setattr(online, back_online)
+        sent_emails.clear()
+        assert client.portal.call(run, "notifications") is True
+        assert (EMAIL, "Tu cuenta fue aceptada") in sent_emails
+        assert NotificationStatus.PENDING not in statuses(client)

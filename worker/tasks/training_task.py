@@ -16,6 +16,7 @@ from voltage_forecasting.domain.model.aggregates.Prediction import Prediction
 from voltage_forecasting.domain.model.aggregates.TrainingExecution import TrainingExecution, TrainingStatus
 from voltage_forecasting.infrastructure.persistence.repositories.TrainingRepositoryImpl import TrainingRepositoryImpl
 from worker.etl.cleaning import database_cell_name
+from worker.tasks.voltage_alerts import replace_voltage_alerts
 from worker.training.gold import TrainingDataError
 from worker.training.pipeline import TrainingResult, train
 
@@ -61,6 +62,8 @@ async def _publish(session, storage, execution: TrainingExecution, model: MlMode
         {"model_id": model.id, "cell_id": int(c), "prediction_date": d.to_pydatetime(), "predicted_voltage": float(v)}
         for c, d, v in zip(predictions["cell_id"], predictions["fecha"], predictions["voltaje"])
     ])
+
+    await replace_voltage_alerts(session, model.id)  # US026, committed with the forecasts it is about
 
     model.is_active = True
     execution.status = TrainingStatus.SUCCESS

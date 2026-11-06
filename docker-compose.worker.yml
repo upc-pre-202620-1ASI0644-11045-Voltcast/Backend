@@ -1,6 +1,7 @@
 # Adds the worker to the local stack and shares the uploaded files and the task queues with the API:
 #   docker compose -f docker-compose.yml -f docker-compose.worker.yml up --build
 #   docker compose -f docker-compose.yml -f docker-compose.worker.yml run --rm worker etl
+#   docker compose -f docker-compose.yml -f docker-compose.worker.yml run --rm worker notifications  (run it on a schedule)
 services:
   backend:
     environment:
@@ -17,6 +18,12 @@ services:
     environment:
       DATABASE_URL: mysql+aiomysql://root:root@db:3306/tp1
       LOCAL_STORAGE_DIR: /data/storage
+      # only `notifications` sends email
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     volumes:
       - storage_data:/data/storage
     depends_on:

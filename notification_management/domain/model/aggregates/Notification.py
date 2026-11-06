@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import Enum as SAEnum, ForeignKey, Index, Integer, String, TIMESTAMP, text
+from sqlalchemy import Enum as SAEnum, ForeignKey, Index, Integer, String, TIMESTAMP, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from iam.domain.model.aggregates.User import User  # noqa: F401  the tables the FKs point to must be known
@@ -58,7 +58,11 @@ class Notification(Base):
     shortcut: the ERD column `channel` is a SET; every row has exactly one channel, so it is an enum here.
     """
     __tablename__ = "notification"
-    __table_args__ = (Index("idx_notif_user_status", "user_id", "status"),)
+    __table_args__ = (
+        Index("idx_notif_user_status", "user_id", "status"),
+        # A forecast is announced once per user and channel (rows without forecast are never equal: NULLs differ).
+        UniqueConstraint("user_id", "prediction_id", "notification_type_id", "channel", name="uq_notif_event"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
