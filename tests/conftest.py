@@ -9,6 +9,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
 _DB_FILE = Path(tempfile.mkdtemp(prefix="voltcast-tests-")) / "test.db"
 
@@ -63,6 +64,23 @@ def sent_emails(monkeypatch) -> list[tuple[str, str]]:
 
     monkeypatch.setattr("shared.infrastructure.email.email_client.send_email", fake_send)
     return sent
+
+
+@pytest.fixture(autouse=True)
+def fake_push(monkeypatch) -> SimpleNamespace:
+    """Replaces FCM: every call is collected in `calls`. Put tokens in `invalid` to have FCM refuse them, or set `fail`."""
+    push = SimpleNamespace(calls=[], invalid=[], fail=False)
+
+    async def send(tokens, title, body, data):
+        if push.fail:
+            raise ConnectionError("FCM is down")
+        push.calls.append((tokens, title, body, data))
+        return [token for token in tokens if token in push.invalid]
+
+    monkeypatch.setattr(
+        "notification_management.application.internal.commandservice.NotificationServiceImpl.send_push", send
+    )
+    return push
 
 
 @pytest.fixture

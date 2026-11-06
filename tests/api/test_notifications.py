@@ -27,7 +27,7 @@ class TestAccessRequest:  # US025
     def test_supervisor_is_notified_of_a_new_request(self, client, sent_emails):
         assert register(client).status_code == 201
         assert sent_emails == [(SUPERVISOR_EMAIL, "Nueva solicitud de registro")]
-        assert statuses(client) == [NotificationStatus.SENT]
+        assert statuses(client) == [NotificationStatus.SENT] * 2  # the email and the push
 
     def test_invalid_request_notifies_nobody(self, client, sent_emails):
         assert register(client, "not-an-email").status_code == 422
@@ -56,7 +56,7 @@ class TestAccountReview:  # US029, US030
 
         monkeypatch.setattr(working_send, offline)
         assert review(client, supervisor_headers, user_id, "approve").status_code == 200  # the approval is not lost
-        assert statuses(client)[-1] == NotificationStatus.PENDING
+        assert NotificationStatus.PENDING in statuses(client)
 
         async def online(to, subject, body_html):
             sent_emails.append((to, subject))
@@ -80,7 +80,7 @@ class TestScheduledDispatch:  # US029, US030 E02: the scheduled Job sends what s
         online = "shared.infrastructure.email.email_client.send_email"
         monkeypatch.setattr(online, offline)
         review(client, supervisor_headers, user_id, "approve")
-        assert statuses(client)[-1] == NotificationStatus.PENDING
+        assert NotificationStatus.PENDING in statuses(client)
 
         async def back_online(to, subject, body_html):
             sent_emails.append((to, subject))
