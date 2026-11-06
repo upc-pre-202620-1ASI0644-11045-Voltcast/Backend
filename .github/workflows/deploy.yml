@@ -52,8 +52,59 @@ jobs:
             --container-image-name $REGISTRY.azurecr.io/backend:${GITHUB_SHA::7}
           az webapp restart -g $RESOURCE_GROUP -n $APP_SERVICE
 
+      # Runs on every deploy and is safe to repeat. The Job that sends the notifications is created on the first run and
+      # takes its settings from the API's App Service, so nothing is typed by hand. It reuses the environment, the
+      # workload profile and the registry login of the existing Jobs / API. Failed runs while MySQL is stopped are expected.
+      - name: Ensure the notifications Job
+        run: |
+          set -euo pipefail
+          job=job-voltcast-notifications
+          image=$REGISTRY.azurecr.io/worker:${GITHUB_SHA::7}
+
+          settings=$(az webapp config appsettings list -g $RESOURCE_GROUP -n $APP_SERVICE -o json)
+          get() { echo "$settings" | jq -r --arg n "$1" '.[] | select(.name == $n) | .value'; }
+          for name in DATABASE_URL SMTP_USER SMTP_PASS SMTP_FROM DOCKER_REGISTRY_SERVER_USERNAME DOCKER_REGISTRY_SERVER_PASSWORD; do
+            echo "::add-mask::$(get $name)"
+          done
+
+          env_vars=(
+            DATABASE_URL=secretref:database-url SMTP_PASS=secretref:smtp-pass
+            "DB_SSL=$(get DB_SSL)" "SMTP_HOST=$(get SMTP_HOST)" "SMTP_PORT=$(get SMTP_PORT)"
+            "SMTP_USER=$(get SMTP_USER)" "SMTP_FROM=$(get SMTP_FROM)"
+          )
+          secrets=("database-url=$(get DATABASE_URL)" "smtp-pass=$(get SMTP_PASS)")
+
+          if az containerapp job show -g $RESOURCE_GROUP -n $job -o none 2>/dev/null; then
+            az containerapp job secret set -g $RESOURCE_GROUP -n $job --secrets "${secrets[@]}" -o none
+            az containerapp job update -g $RESOURCE_GROUP -n $job --set-env-vars "${env_vars[@]}" -o none
+            exit 0
+          fi
+
+          environment=$(az containerapp job show -g $RESOURCE_GROUP -n job-voltcast-etl --query properties.environmentId -o tsv)
+          profile=$(az containerapp job show -g $RESOURCE_GROUP -n job-voltcast-etl --query properties.workloadProfileName -o tsv)
+          extra=()
+          if [ -n "$profile" ] && [ "$profile" != "None" ]; then extra+=(--workload-profile-name "$profile"); fi
+          registry=$(get DOCKER_REGISTRY_SERVER_URL)
+
+          # Creating Jobs with the CLI sometimes times out on the server: delete the half-made one and try once more.
+          for attempt in 1 2; do
+            if az containerapp job create -g $RESOURCE_GROUP -n $job --environment "$environment" "${extra[@]}" \
+                 --trigger-type Schedule --cron-expression "0 */12 * * *" --replica-timeout 300 --replica-retry-limit 1 \
+                 --cpu 0.5 --memory 1Gi --image $image --args notifications \
+                 --registry-server "${registry#https://}" \
+                 --registry-username "$(get DOCKER_REGISTRY_SERVER_USERNAME)" \
+                 --registry-password "$(get DOCKER_REGISTRY_SERVER_PASSWORD)" \
+                 --secrets "${secrets[@]}" --env-vars "${env_vars[@]}" -o none; then
+              exit 0
+            fi
+            az containerapp job delete -g $RESOURCE_GROUP -n $job --yes -o none 2>/dev/null || true
+            sleep 15
+          done
+          echo "Could not create $job" >&2
+          exit 1
+
       - name: Deploy the Jobs
         run: |
-          for job in job-voltcast-etl job-voltcast-training; do
+          for job in job-voltcast-etl job-voltcast-training job-voltcast-notifications; do
             az containerapp job update -g $RESOURCE_GROUP -n $job --image $REGISTRY.azurecr.io/worker:${GITHUB_SHA::7}
           done
