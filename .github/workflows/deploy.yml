@@ -53,8 +53,8 @@ jobs:
           az webapp restart -g $RESOURCE_GROUP -n $APP_SERVICE
 
       # Runs on every deploy and is safe to repeat. The Job that sends the notifications is created on the first run and
-      # takes its settings from the API's App Service, so nothing is typed by hand. It reuses the environment, the
-      # workload profile and the registry login of the existing Jobs / API. Failed runs while MySQL is stopped are expected.
+      # takes its database and SMTP settings from the API's App Service, so nothing is typed by hand. It reuses the environment, the
+      # workload profile and the registry login of the ETL Job. Failed runs while MySQL is stopped are expected.
       - name: Ensure the notifications Job
         run: |
           set -euo pipefail
@@ -63,7 +63,7 @@ jobs:
 
           settings=$(az webapp config appsettings list -g $RESOURCE_GROUP -n $APP_SERVICE -o json)
           get() { echo "$settings" | jq -r --arg n "$1" '.[] | select(.name == $n) | .value'; }
-          for name in DATABASE_URL SMTP_USER SMTP_PASS SMTP_FROM DOCKER_REGISTRY_SERVER_USERNAME DOCKER_REGISTRY_SERVER_PASSWORD; do
+          for name in DATABASE_URL SMTP_USER SMTP_PASS SMTP_FROM; do
             echo "::add-mask::$(get $name)"
           done
 
@@ -84,16 +84,29 @@ jobs:
           profile=$(az containerapp job show -g $RESOURCE_GROUP -n job-voltcast-etl --query properties.workloadProfileName -o tsv)
           extra=()
           if [ -n "$profile" ] && [ "$profile" != "None" ]; then extra+=(--workload-profile-name "$profile"); fi
-          registry=$(get DOCKER_REGISTRY_SERVER_URL)
+          # Same registry login as the ETL Job, which already pulls from ACR: its password (read from its secret) or its identity.
+          registry=$(az containerapp job show -g $RESOURCE_GROUP -n job-voltcast-etl --query "properties.configuration.registries[0]" -o json)
+          server=$(echo "$registry" | jq -r '.server')
+          username=$(echo "$registry" | jq -r '.username // empty')
+          identity=$(echo "$registry" | jq -r '.identity // empty')
+          if [ -n "$username" ]; then
+            password=$(az containerapp job secret show -g $RESOURCE_GROUP -n job-voltcast-etl \
+              --secret-name "$(echo "$registry" | jq -r '.passwordSecretRef')" --query value -o tsv)
+            echo "::add-mask::$password"
+            login=(--registry-username "$username" --registry-password "$password")
+          elif [ -n "$identity" ] && [ "$identity" != system ]; then
+            login=(--mi-user-assigned "$identity" --registry-identity "$identity")
+          else
+            echo "The ETL Job pulls with a system identity: create $job by hand and give it the AcrPull role" >&2
+            exit 1
+          fi
 
           # Creating Jobs with the CLI sometimes times out on the server: delete the half-made one and try once more.
           for attempt in 1 2; do
             if az containerapp job create -g $RESOURCE_GROUP -n $job --environment "$environment" "${extra[@]}" \
                  --trigger-type Schedule --cron-expression "0 */12 * * *" --replica-timeout 300 --replica-retry-limit 1 \
                  --cpu 0.5 --memory 1Gi --image $image --args notifications \
-                 --registry-server "${registry#https://}" \
-                 --registry-username "$(get DOCKER_REGISTRY_SERVER_USERNAME)" \
-                 --registry-password "$(get DOCKER_REGISTRY_SERVER_PASSWORD)" \
+                 --registry-server "$server" "${login[@]}" \
                  --secrets "${secrets[@]}" --env-vars "${env_vars[@]}" -o none; then
               exit 0
             fi
