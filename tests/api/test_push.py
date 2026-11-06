@@ -4,7 +4,7 @@ from notification_management.domain.model.aggregates.DeviceToken import DeviceTo
 from notification_management.domain.model.aggregates.Notification import Notification, NotificationChannel, NotificationStatus
 from shared.infrastructure.persistence.configuration.database_configuration import AsyncSessionLocal
 from tests.api.test_notifications import register
-from tests.api.test_training import ALERT_RULES, cleaned_dataset, request_training, run_training
+from tests.api.test_training import ALERT_RULES, cleaned_dataset, force_limit, request_training, run_training
 from tests.conftest import API
 from worker.main import run
 
@@ -43,12 +43,9 @@ class TestInbox:
             ("R", "Nueva solicitud de registro", "Hay una nueva solicitud de acceso pendiente de revisión")
         ]
 
-    def test_the_engineer_reads_only_the_acceptance(self, client, register_engineer):
+    def test_the_account_decision_is_email_only_so_the_engineer_inbox_is_empty(self, client, register_engineer):
         _, headers = register_engineer()
-        items = client.get(NOTIFICATIONS, headers=headers).json()
-        assert [(n["type"], n["title"], n["body"]) for n in items] == [
-            ("A", "Tu cuenta fue aceptada", "Ya puedes iniciar sesión en VoltCast")
-        ]
+        assert client.get(NOTIFICATIONS, headers=headers).json() == []
 
     def test_the_inbox_requires_a_token(self, client):
         assert client.get(NOTIFICATIONS).status_code in (401, 403)
@@ -136,14 +133,26 @@ class TestPushDelivery:
         assert push_statuses(client) == [NotificationStatus.SENT]
         assert len(fake_push.calls) == 1
 
-    def test_the_voltage_alert_names_the_cell_and_the_day(self, client, supervisor_headers, register_engineer, fake_push):
+    def test_the_voltage_alerts_go_out_as_one_push_per_user(self, client, supervisor_headers, register_engineer, fake_push):
         _, engineer = register_engineer()
         add_device(client, engineer, OTHER_TOKEN)
-        client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": 1.0})
+        force_limit(client, 1.0)
         request_training(client, engineer, cleaned_dataset(client, engineer))
-        run_training(client)
-        fake_push.calls.clear()
-        client.portal.call(run, "notifications")
+        run_training(client)  # the training pushes the alerts itself
         assert {call[1] for call in fake_push.calls} == {"Voltaje excesivo pronosticado"}
-        assert {call[2].split(":")[0] for call in fake_push.calls} == {"A1", "A2", "A3", "B1", "B2"}
-        assert all("V pronosticados para el" in call[2] for call in fake_push.calls)
+        assert len(fake_push.calls) == 1 and "5 avisos nuevos" in fake_push.calls[0][2]  # one push, not one per cell
+
+    def test_the_training_pushes_its_alerts_right_away_and_a_push_failure_does_not_fail_it(
+        self, client, supervisor_headers, register_engineer, fake_push
+    ):
+        _, engineer = register_engineer()
+        add_device(client, engineer, OTHER_TOKEN)
+        force_limit(client, 1.0)
+        fake_push.calls.clear()
+        request_training(client, engineer, cleaned_dataset(client, engineer))
+        run_training(client)  # no scheduled Job in between
+        assert len(fake_push.calls) == 1
+
+        fake_push.fail = True
+        request_training(client, engineer, cleaned_dataset(client, engineer))
+        assert run_training(client) is True  # the model is published, the alerts stay pending for the Job

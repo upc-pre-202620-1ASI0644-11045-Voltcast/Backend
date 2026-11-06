@@ -15,6 +15,7 @@ from tests.api.test_training import (  # noqa: F401  small_network is an autouse
     ALERT_RULES,
     cleaned_dataset,
     db,
+    force_limit,
     request_training,
     run_training,
     small_network,
@@ -44,11 +45,11 @@ class TestVoltageExceeded:  # US026
     def test_every_engineer_is_told_per_cell_of_the_first_day_above_the_limit(
         self, client, engineer_headers, supervisor_headers
     ):
-        client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": 1.0})  # below any real voltage
+        force_limit(client, 1.0)  # below any real voltage
         train(client, engineer_headers)
         rows = alerts(client, VOLTAGE_EXCEEDED)
         assert len(rows) == CELLS
-        assert {(r.channel, r.status) for r in rows} == {(NotificationChannel.PUSH, NotificationStatus.PENDING)}
+        assert {(r.channel, r.status) for r in rows} == {(NotificationChannel.PUSH, NotificationStatus.SENT)}  # pushed by the training; no phone, so the inbox is the delivery
 
         async def first_days_match(session):
             first = set((await session.execute(
@@ -62,7 +63,7 @@ class TestVoltageExceeded:  # US026
         assert db(client, first_days_match)
 
     def test_no_notification_when_nothing_exceeds_the_limit(self, client, engineer_headers, supervisor_headers):
-        client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": 1000.0})
+        client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": 3.45})
         train(client, engineer_headers)
         assert alerts(client, VOLTAGE_EXCEEDED) == []
 
@@ -71,13 +72,13 @@ class TestVoltageExceeded:  # US026
         assert alerts(client, VOLTAGE_EXCEEDED) == []
 
     def test_supervisors_are_not_notified(self, client, supervisor_headers, register_engineer):
-        client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": 1.0})
+        force_limit(client, 1.0)
         user_id, headers = register_engineer()
         train(client, headers)
         assert {r.user_id for r in alerts(client, VOLTAGE_EXCEEDED)} == {user_id}
 
     def test_a_new_version_replaces_the_alerts_of_the_previous_one(self, client, engineer_headers, supervisor_headers):
-        client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": 1.0})
+        force_limit(client, 1.0)
         dataset = cleaned_dataset(client, engineer_headers)
         request_training(client, engineer_headers, dataset)
         run_training(client)
@@ -100,7 +101,7 @@ class TestDateNear:  # US028
     def prepare(self, client, headers, supervisor_headers):
         """A trained model whose first two forecasts are tomorrow and the day after, both above the limit."""
         train(client, headers)
-        client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": 1.0})
+        force_limit(client, 1.0)
 
         async def move(session):
             ids = (await session.execute(select(Prediction.id).order_by(Prediction.id).limit(2))).scalars().all()
@@ -130,7 +131,7 @@ class TestDateNear:  # US028
 
     def test_does_not_remind_of_forecasts_within_the_limit(self, client, engineer_headers, supervisor_headers):
         self.prepare(client, engineer_headers, supervisor_headers)
-        client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": 1000.0})
+        client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": 3.45})
         self.remind(client)
         assert alerts(client, DATE_NEAR) == []
 

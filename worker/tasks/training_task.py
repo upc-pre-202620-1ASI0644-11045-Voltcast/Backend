@@ -15,6 +15,8 @@ from voltage_forecasting.domain.model.aggregates.ModelEvaluation import ModelEva
 from voltage_forecasting.domain.model.aggregates.Prediction import Prediction
 from voltage_forecasting.domain.model.aggregates.TrainingExecution import TrainingExecution, TrainingStatus
 from voltage_forecasting.infrastructure.persistence.repositories.TrainingRepositoryImpl import TrainingRepositoryImpl
+from notification_management.domain.model.aggregates.Notification import NotificationChannel
+from notification_management.interface.notifier import notifier_for
 from worker.etl.cleaning import database_cell_name
 from worker.tasks.voltage_alerts import replace_voltage_alerts
 from worker.training.gold import TrainingDataError
@@ -73,6 +75,14 @@ async def _publish(session, storage, execution: TrainingExecution, model: MlMode
     await session.commit()
 
 
+async def _push_alerts(session) -> None:
+    """US026: the alerts queued by the training reach the phones now. A failure leaves them pending for the scheduled Job."""
+    try:
+        await notifier_for(session).dispatch_pending((NotificationChannel.PUSH,))
+    except Exception:
+        logger.exception("The alerts could not be pushed; the scheduled Job will retry")
+
+
 async def process_training(message: dict, storage) -> None:
     """
     Trains a model version on a cleaned dataset, forecasts every cell and evaluates it (US005, US006).
@@ -92,6 +102,7 @@ async def process_training(message: dict, storage) -> None:
             silver = pd.read_parquet(BytesIO(await storage.read(dataset.processed_path)), engine="pyarrow")
             result = await asyncio.to_thread(train, silver)
             await _publish(session, storage, execution, model, result)
+            await _push_alerts(session)
             logger.info("Training %s done: model %s %s, %s", execution_id, model.name, model.version, result.metrics)
         except TrainingDataError as error:
             await session.rollback()

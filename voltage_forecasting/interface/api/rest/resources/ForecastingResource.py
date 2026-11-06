@@ -2,6 +2,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
+from voltage_forecasting.domain.model.aggregates.AlertRule import MAX_MAX_VOLTAGE, MIN_MAX_VOLTAGE
 from voltage_forecasting.domain.model.aggregates.TrainingExecution import TrainingStatus
 
 
@@ -28,10 +29,13 @@ class TrainingResponse(BaseModel):
 
 
 class AlertRuleRequest(BaseModel):
-    max_voltage: float = Field(..., gt=0, description="Maximum allowed voltage (V)")
+    max_voltage: float = Field(
+        ..., gt=MIN_MAX_VOLTAGE, le=MAX_MAX_VOLTAGE,
+        description=f"Maximum allowed voltage (V): above {MIN_MAX_VOLTAGE} and up to {MAX_MAX_VOLTAGE}",
+    )
     cell_id: int | None = Field(None, description="Leave empty to set the general limit for every cell")
 
-    model_config = {"json_schema_extra": {"examples": [{"max_voltage": 3.2, "cell_id": None}]}}
+    model_config = {"json_schema_extra": {"examples": [{"max_voltage": 3.4, "cell_id": None}]}}
 
 
 class AlertRuleResponse(BaseModel):

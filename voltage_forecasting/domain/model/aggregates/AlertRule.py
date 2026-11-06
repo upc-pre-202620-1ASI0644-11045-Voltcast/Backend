@@ -7,6 +7,11 @@ from shared.infrastructure.persistence.configuration.column_types import SmallIn
 from shared.infrastructure.persistence.configuration.database_configuration import Base
 
 
+# Range of the limit the Supervisor can set (V), as the plant defines it: above 3.35 and up to 3.45.
+MIN_MAX_VOLTAGE = 3.35  # exclusive
+MAX_MAX_VOLTAGE = 3.45  # inclusive
+
+
 class AlertRule(Base):
     """
     Aggregate Root: Voltaje máximo permitido (US007-E02). Sin celda es el umbral general; con celda
@@ -26,5 +31,5 @@ class AlertRule(Base):
 
     @staticmethod
     def validate_max_voltage(max_voltage: float) -> None:
-        if max_voltage <= 0:
-            raise ValueError("Maximum voltage must be greater than zero")
+        if not MIN_MAX_VOLTAGE < max_voltage <= MAX_MAX_VOLTAGE:
+            raise ValueError(f"Maximum voltage must be above {MIN_MAX_VOLTAGE} V and at most {MAX_MAX_VOLTAGE} V")
