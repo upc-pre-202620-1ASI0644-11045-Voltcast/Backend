@@ -37,6 +37,7 @@ async def _reset_database() -> None:
         await connection.run_sync(Base.metadata.drop_all)
         await connection.run_sync(Base.metadata.create_all)
     await main.seed_roles()
+    await main.seed_notification_types()
     await main.seed_supervisor()
 
 
@@ -50,6 +51,18 @@ def small_workbooks(monkeypatch):
 def empty_storage():
     """The uploaded files and the queued tasks live on disk, so every test starts without them."""
     shutil.rmtree(os.environ["LOCAL_STORAGE_DIR"], ignore_errors=True)
+
+
+@pytest.fixture(autouse=True)
+def sent_emails(monkeypatch) -> list[tuple[str, str]]:
+    """Replaces the SMTP call of every email: the (recipient, subject) pairs are collected here."""
+    sent: list[tuple[str, str]] = []
+
+    async def fake_send(to: str, subject: str, body_html: str) -> None:
+        sent.append((to, subject))
+
+    monkeypatch.setattr("shared.infrastructure.email.email_client.send_email", fake_send)
+    return sent
 
 
 @pytest.fixture

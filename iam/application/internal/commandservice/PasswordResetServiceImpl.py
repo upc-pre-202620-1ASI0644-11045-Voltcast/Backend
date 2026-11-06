@@ -6,6 +6,7 @@ from iam.domain.model.commands.PasswordResetCommands import (
 )
 from iam.domain.repositories.PasswordResetRepository import PasswordResetRepository
 from iam.domain.repositories.UserRepository import UserRepository
+from notification_management.domain.model.aggregates.Notification import PASSWORD_CHANGED
 from shared.infrastructure.email.email_client import send_verification_code
 
 INVALID_CODE_MESSAGE = "Invalid or expired verification code"
@@ -17,9 +18,11 @@ class PasswordResetServiceImpl:
         self,
         password_reset_repo: PasswordResetRepository,
         user_repo: UserRepository,
+        notifier,
     ):
         self._password_reset_repo = password_reset_repo
         self._user_repo = user_repo
+        self._notifier = notifier
 
     async def request_reset(self, command: RequestPasswordResetCommand) -> None:
         user = await self._user_repo.find_by_email(command.email.lower().strip())
@@ -50,3 +53,4 @@ class PasswordResetServiceImpl:
         entry.mark_used()
         # Same session: one commit saves the new password and consumes the code atomically
         await self._user_repo.save(user)
+        await self._notifier.notify(PASSWORD_CHANGED, [user])  # US024

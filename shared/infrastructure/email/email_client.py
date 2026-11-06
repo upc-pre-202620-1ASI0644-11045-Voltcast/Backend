@@ -37,17 +37,34 @@ async def send_password_changed_notification(to: str, full_name: str | None) -> 
     await send_email(to, "Contraseña cambiada", body)
 
 
-async def send_new_registration_request_notification(to: str, requester_name: str, requester_email: str) -> None:
+async def send_new_registration_request_notification(to: str, requests: list[tuple[str, str]]) -> None:
+    """`requests` are the (name, email) of the access requests waiting for review."""
+    items = "".join(f"<li><b>{name}</b> ({email})</li>" for name, email in requests)
     body = f"""
     <p>Hola,</p>
-    <p>Se generó una nueva solicitud de creación de cuenta:</p>
-    <ul>
-        <li><b>Nombre:</b> {requester_name}</li>
-        <li><b>Email:</b> {requester_email}</li>
-    </ul>
-    <p>Revisala desde el panel de administración.</p>
+    <p>Hay solicitudes de creación de cuenta pendientes de revisión:</p>
+    <ul>{items}</ul>
+    <p>Revísalas desde el panel de administración.</p>
     """
     await send_email(to, "Nueva solicitud de registro", body)
+
+
+async def send_account_accepted_notification(to: str, full_name: str | None) -> None:
+    name = full_name or "Usuario"
+    body = f"""
+    <p>Hola {name},</p>
+    <p>Tu solicitud de acceso fue aceptada. Ya puedes iniciar sesión en VoltCast.</p>
+    """
+    await send_email(to, "Tu cuenta fue aceptada", body)
+
+
+async def send_account_rejected_notification(to: str, full_name: str | None) -> None:
+    name = full_name or "Usuario"
+    body = f"""
+    <p>Hola {name},</p>
+    <p>Tu solicitud de acceso fue rechazada. Si crees que es un error, contacta al supervisor.</p>
+    """
+    await send_email(to, "Tu cuenta fue rechazada", body)
 
 
 async def send_verification_code(to: str, code: str) -> None:
