@@ -9,7 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from shared.infrastructure.persistence.configuration.column_types import SmallInt
 from shared.infrastructure.persistence.configuration.database_configuration import Base
 
-ALLOWED_EXTENSIONS = {".xlsx", ".xlsm"}
+ALLOWED_EXTENSIONS = {".xlsx", ".xlsm", ".xls"}
 MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 
 

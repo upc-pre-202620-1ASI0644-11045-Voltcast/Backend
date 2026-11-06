@@ -47,7 +47,7 @@ async def _complemented(repository, storage, dataset) -> list:
         base = await repository.find_by_id(base_id)
         paths.append(base.storage_path)
         base_id = base.base_dataset_id
-    return [await asyncio.to_thread(read_sections, await storage.read(path)) for path in reversed(paths)]
+    return [await asyncio.to_thread(read_sections, await storage.read(path), PurePosixPath(path).suffix) for path in reversed(paths)]
 
 
 async def process_etl(message: dict, storage) -> None:
@@ -67,7 +67,7 @@ async def process_etl(message: dict, storage) -> None:
         dataset.start_cleaning()
         await repository.save(dataset)
         try:
-            new = await asyncio.to_thread(read_sections, await storage.read(dataset.storage_path))
+            new = await asyncio.to_thread(read_sections, await storage.read(dataset.storage_path), PurePosixPath(dataset.storage_path).suffix)
             check_not_future(new)
             sections = new
             if dataset.base_dataset_id:

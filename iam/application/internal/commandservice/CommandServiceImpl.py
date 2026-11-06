@@ -9,6 +9,11 @@ from iam.domain.model.commands.UserCommands import (
     ChangeUserStatusCommand,
 )
 from iam.domain.repositories.UserRepository import UserRepository
+from notification_management.domain.model.aggregates.Notification import (
+    ACCESS_REQUESTED,
+    ACCOUNT_ACCEPTED,
+    ACCOUNT_REJECTED,
+)
 from shared.domain.exceptions.domain_exceptions import EntityNotFoundException
 
 INACTIVE_ACCOUNT_MESSAGES = {
@@ -28,8 +33,9 @@ class AuthenticationResponse:
 class CommandServiceImpl:
     """Command Service for the IAM context (authentication, registration requests and account management)."""
 
-    def __init__(self, repository: UserRepository):
+    def __init__(self, repository: UserRepository, notifier):
         self._repository = repository
+        self._notifier = notifier
 
     # =========================================================================
     # AUTH (US021)
@@ -72,18 +78,19 @@ class CommandServiceImpl:
         if existing and existing.status == UserStatus.REJECTED:
             # Reuse the row: user.id is a TINYINT and auto-increment values are never recycled
             existing.resubmit(full_name, hashed_password)
-            return await self._repository.save(existing)
-        if existing:
+            user = await self._repository.save(existing)
+        elif existing:
             raise ValueError(f"Email '{email}' is already registered")
-
-        user = User(
-            email=email,
-            hashed_password=hashed_password,
-            full_name=full_name,
-            role_id=None,
-            status=UserStatus.PENDING,
-        )
-        return await self._repository.save(user)
+        else:
+            user = await self._repository.save(User(
+                email=email,
+                hashed_password=hashed_password,
+                full_name=full_name,
+                role_id=None,
+                status=UserStatus.PENDING,
+            ))
+        await self._notifier.notify_supervisors(ACCESS_REQUESTED)  # US025
+        return user
 
     # =========================================================================
     # SUPERVISOR — Approval (US019) and account management (US020)
@@ -98,7 +105,9 @@ class CommandServiceImpl:
             user.approve(role)
         else:
             user.reject()
-        return await self._repository.save(user)
+        user = await self._repository.save(user)
+        await self._notifier.notify(ACCOUNT_ACCEPTED if command.approve else ACCOUNT_REJECTED, [user])  # US029, US030
+        return user
 
     async def update_user(self, command: UpdateUserCommand) -> User:
         user = await self._get_manageable_or_raise(command.user_id)

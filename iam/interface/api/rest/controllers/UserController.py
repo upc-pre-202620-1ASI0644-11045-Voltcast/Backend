@@ -13,6 +13,7 @@ from iam.interface.api.rest.resources.UserRequestResource import (
     UpdateUserRequest,
     ChangeUserStatusRequest,
 )
+from notification_management.interface.notifier import notifier_for
 from shared.domain.exceptions.domain_exceptions import EntityNotFoundException
 from shared.infrastructure.persistence.configuration.database_configuration import get_db_session
 
@@ -66,7 +67,7 @@ async def review_registration(
     db: AsyncSession = Depends(get_db_session),
 ):
     try:
-        service = CommandServiceImpl(UserRepositoryImpl(db))
+        service = CommandServiceImpl(UserRepositoryImpl(db), notifier_for(db))
         user = await service.review_registration(AuthResourceAssembler.to_review_command(user_id, request))
         return AuthResourceAssembler.to_user_response(user)
     except Exception as e:
@@ -81,7 +82,7 @@ async def update_user(
     db: AsyncSession = Depends(get_db_session),
 ):
     try:
-        service = CommandServiceImpl(UserRepositoryImpl(db))
+        service = CommandServiceImpl(UserRepositoryImpl(db), notifier_for(db))
         user = await service.update_user(AuthResourceAssembler.to_update_user_command(user_id, request))
         return AuthResourceAssembler.to_user_response(user)
     except Exception as e:
@@ -96,7 +97,7 @@ async def change_user_status(
     db: AsyncSession = Depends(get_db_session),
 ):
     try:
-        service = CommandServiceImpl(UserRepositoryImpl(db))
+        service = CommandServiceImpl(UserRepositoryImpl(db), notifier_for(db))
         user = await service.change_user_status(AuthResourceAssembler.to_change_status_command(user_id, request))
         return AuthResourceAssembler.to_user_response(user)
     except Exception as e:

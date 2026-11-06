@@ -18,6 +18,7 @@ from dataset_management.interface.api.rest.controllers.DatasetController import 
 from voltage_forecasting.interface.api.rest.controllers.ForecastController import router as forecast_router
 from voltage_forecasting.interface.api.rest.controllers.TrainingController import router as training_router
 from voltage_forecasting.interface.api.rest.controllers.AlertRuleController import router as alert_rule_router
+from notification_management.domain.model.aggregates.Notification import NOTIFICATION_TYPES, NotificationType
 # Imported so create_all also creates the tables only the Job writes to.
 from voltage_forecasting.domain.model.aggregates import ModelEvaluation as _model_evaluation  # noqa: F401
 
@@ -32,6 +33,15 @@ async def seed_roles():
             result = await session.execute(select(Role).where(Role.name == role_name))
             if not result.scalars().first():
                 session.add(Role(name=role_name))
+        await session.commit()
+
+
+async def seed_notification_types():
+    async with AsyncSessionLocal() as session:
+        known = set((await session.execute(select(NotificationType.type))).scalars())
+        session.add_all(
+            NotificationType(type=code, message=message) for code, message in NOTIFICATION_TYPES.items() if code not in known
+        )
         await session.commit()
 
 
@@ -69,6 +79,7 @@ async def lifespan(_: FastAPI):
         await sync_cell_management_schema(connection)
         await sync_dataset_management_schema(connection)
     await seed_roles()
+    await seed_notification_types()
     await seed_supervisor()
     yield
     await close_redis()

@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from tests.excel_files import section_rows, workbook_bytes
+from tests.excel_files import section_rows, workbook_bytes, xls_bytes
 from worker.etl.excel import SchemaError, read_sections, section_of
 from worker.etl.pipeline import build_silver, cleaning_counts
 
@@ -64,6 +64,21 @@ class TestReadSections:  # US002, US003
     def test_rejects_a_file_that_is_not_a_workbook(self):
         with pytest.raises(SchemaError, match="not a valid Excel workbook"):
             read_sections(b"this is not an excel file")
+
+
+class TestReadXls:
+    def test_gives_the_same_result_as_xlsx(self):
+        sheets = {"EL A": section_rows(cells=[1, 2, 3]), "Sección B": section_rows(cells=[1, 2]), "Notas": [["x"]]}
+        xls, xlsx = read_sections(xls_bytes(sheets), ".xls"), read_sections(workbook_bytes(sheets))
+        assert xls.keys() == xlsx.keys() == {"A", "B"}
+        for el in xls:
+            assert xls[el][1] == xlsx[el][1]
+            pd.testing.assert_frame_equal(xls[el][0], xlsx[el][0], check_dtype=False)
+
+    def test_a_corrupt_xls_is_not_a_valid_workbook(self):
+        for content in (b"this is not an excel file", xls_bytes({"EL A": section_rows()})[:300]):
+            with pytest.raises(SchemaError, match="not a valid Excel workbook"):
+                read_sections(content, ".xls")
 
 
 class TestCleaningCounts:  # US004, TS008

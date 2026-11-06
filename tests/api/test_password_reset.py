@@ -129,3 +129,19 @@ class TestSingleCodePerUser:
                 )).scalar_one()
 
         assert client.portal.call(count_rows) == 1
+
+
+class TestPasswordChangedEmail:  # US024
+    def test_the_owner_is_notified_when_the_password_changes(self, client, register_engineer, sent_codes, sent_emails):
+        register_engineer()
+        request_code(client)
+        sent_emails.clear()
+        assert confirm(client, sent_codes[EMAIL]).status_code == 200
+        assert sent_emails == [(EMAIL, "Contraseña cambiada")]
+
+    def test_nobody_is_notified_when_the_password_is_not_valid(self, client, register_engineer, sent_codes, sent_emails):
+        register_engineer()
+        request_code(client)
+        sent_emails.clear()
+        assert confirm(client, sent_codes[EMAIL], new_password="weak").status_code in (400, 422)
+        assert sent_emails == []

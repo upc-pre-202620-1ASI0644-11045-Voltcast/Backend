@@ -29,6 +29,10 @@ class TestUploadDataset:  # US001
             assert "Unsupported file format" in response.json()["detail"]
         assert get_task_queue().pending(ETL_QUEUE) == []
 
+    def test_accepts_xls_and_stores_it_with_its_extension(self, client, engineer_headers):
+        assert upload(client, engineer_headers, "voltages.XLS").status_code == 201
+        assert len(list((Path(os.environ["LOCAL_STORAGE_DIR"]) / "raw").glob("*.xls"))) == 1
+
     def test_rejects_the_upload_while_a_training_is_in_progress(self, client, engineer_headers):
         from tests.api.test_etl import run_etl, uploaded
 

@@ -23,6 +23,7 @@ from iam.interface.api.rest.resources.PasswordResetResource import (
     RequestPasswordResetRequest,
     ConfirmPasswordResetRequest,
 )
+from notification_management.interface.notifier import notifier_for
 from shared.infrastructure.persistence.configuration.database_configuration import get_db_session
 from shared.infrastructure.security.rate_limiter import rate_limit
 
@@ -44,7 +45,7 @@ async def login(
     db: AsyncSession = Depends(get_db_session),
 ):
     try:
-        service = CommandServiceImpl(UserRepositoryImpl(db))
+        service = CommandServiceImpl(UserRepositoryImpl(db), notifier_for(db))
         auth_response = await service.sign_in(AuthResourceAssembler.to_sign_in_command(request))
         return AuthResourceAssembler.to_authentication_response(auth_response)
     except ValueError as e:
@@ -59,7 +60,7 @@ async def refresh_token(
     db: AsyncSession = Depends(get_db_session),
 ):
     try:
-        service = CommandServiceImpl(UserRepositoryImpl(db))
+        service = CommandServiceImpl(UserRepositoryImpl(db), notifier_for(db))
         access_token = await service.refresh_access_token(request.refresh_token)
         return TokenResponse(access_token=access_token)
     except ValueError as e:
@@ -80,7 +81,7 @@ async def register(
     db: AsyncSession = Depends(get_db_session),
 ):
     try:
-        service = CommandServiceImpl(UserRepositoryImpl(db))
+        service = CommandServiceImpl(UserRepositoryImpl(db), notifier_for(db))
         user = await service.register(AuthResourceAssembler.to_register_command(request))
         return AuthResourceAssembler.to_user_response(user)
     except ValueError as e:
@@ -100,7 +101,7 @@ async def request_password_reset(
     db: AsyncSession = Depends(get_db_session),
 ):
     try:
-        service = PasswordResetServiceImpl(PasswordResetRepositoryImpl(db), UserRepositoryImpl(db))
+        service = PasswordResetServiceImpl(PasswordResetRepositoryImpl(db), UserRepositoryImpl(db), notifier_for(db))
         await service.request_reset(AuthResourceAssembler.to_request_reset_command(request))
         return MessageResponse(message="If the email is registered, a verification code has been sent.")
     except Exception as e:
@@ -118,7 +119,7 @@ async def confirm_password_reset(
     db: AsyncSession = Depends(get_db_session),
 ):
     try:
-        service = PasswordResetServiceImpl(PasswordResetRepositoryImpl(db), UserRepositoryImpl(db))
+        service = PasswordResetServiceImpl(PasswordResetRepositoryImpl(db), UserRepositoryImpl(db), notifier_for(db))
         await service.confirm_reset(AuthResourceAssembler.to_confirm_reset_command(request))
         return MessageResponse(message="Password updated successfully.")
     except ValueError as e:

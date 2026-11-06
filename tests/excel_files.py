@@ -42,3 +42,18 @@ def varying_rows(days: int = 520, cells: list[int] | None = None, seed: int = 0)
         volts = [float(level[day] + 0.01 * n + rng.normal(0, 0.004)) for n in cells]
         rows.append([datetime(2020, 1, 1) + timedelta(days=day), sum(volts), float(ka[day]), *volts])
     return rows
+
+
+def xls_bytes(sheets: dict[str, list[list]]) -> bytes:
+    import xlwt
+
+    workbook = xlwt.Workbook()
+    date_style = xlwt.easyxf(num_format_str="YYYY-MM-DD")
+    for name, rows in sheets.items():
+        sheet = workbook.add_sheet(name)
+        for r, row in enumerate(rows):
+            for c, value in enumerate(row):
+                sheet.write(r, c, value, date_style) if isinstance(value, datetime) else sheet.write(r, c, value)
+    buffer = BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
