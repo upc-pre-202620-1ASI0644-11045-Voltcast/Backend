@@ -42,6 +42,29 @@ def _values(enum) -> list[str]:
     return [member.value for member in enum]
 
 
+# Channels of the account events; the voltage alerts (V, D) are queued as push rows by the Job that creates them.
+CHANNELS = {
+    PASSWORD_CHANGED: [NotificationChannel.EMAIL],
+    ACCESS_REQUESTED: [NotificationChannel.EMAIL, NotificationChannel.PUSH],
+    ACCOUNT_ACCEPTED: [NotificationChannel.EMAIL, NotificationChannel.PUSH],
+    ACCOUNT_REJECTED: [NotificationChannel.EMAIL, NotificationChannel.PUSH],
+}
+
+_BODIES = {
+    PASSWORD_CHANGED: "Tu contraseña fue cambiada",
+    ACCESS_REQUESTED: "Hay una nueva solicitud de acceso pendiente de revisión",
+    ACCOUNT_ACCEPTED: "Ya puedes iniciar sesión en VoltCast",
+    ACCOUNT_REJECTED: "Tu solicitud de acceso fue rechazada",
+}
+
+
+def describe(type_code: str, cell_name: str | None, prediction_date: datetime | None, voltage: float | None) -> str:
+    """Text of a notification, for the push and for the inbox (the title is the message of its type)."""
+    if type_code in (VOLTAGE_EXCEEDED, DATE_NEAR) and cell_name and prediction_date is not None and voltage is not None:
+        return f"{cell_name}: {voltage:.3f} V pronosticados para el {prediction_date:%d/%m/%Y}"
+    return _BODIES.get(type_code, "")
+
+
 class NotificationType(Base):
     """Catálogo de tipos de notificación (ver NOTIFICATION_TYPES)."""
     __tablename__ = "notification_type"

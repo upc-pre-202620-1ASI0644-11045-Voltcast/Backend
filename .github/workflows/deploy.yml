@@ -73,6 +73,13 @@ jobs:
             "SMTP_USER=$(get SMTP_USER)" "SMTP_FROM=$(get SMTP_FROM)"
           )
           secrets=("database-url=$(get DATABASE_URL)" "smtp-pass=$(get SMTP_PASS)")
+          # Push notifications: the Firebase service account, once it is set in the App Service (one line of JSON)
+          firebase=$(get FIREBASE_CREDENTIALS_JSON)
+          if [ -n "$firebase" ]; then
+            echo "::add-mask::$firebase"
+            secrets+=("firebase-credentials=$firebase")
+            env_vars+=(FIREBASE_CREDENTIALS_JSON=secretref:firebase-credentials)
+          fi
 
           if az containerapp job show -g $RESOURCE_GROUP -n $job -o none 2>/dev/null; then
             az containerapp job secret set -g $RESOURCE_GROUP -n $job --secrets "${secrets[@]}" -o none
