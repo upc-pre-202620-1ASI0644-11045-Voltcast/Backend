@@ -78,20 +78,20 @@ class TestViewForecasts:  # US007, US008
     def test_flags_the_cells_above_the_allowed_voltage(self, client, engineer_headers, supervisor_headers):
         a1, b1 = (create_cell(client, engineer_headers, n)["id"] for n in ("A1", "B1"))
         model = active_model(client)
-        seed(client, forecast(model, a1, 1, 3.3), forecast(model, b1, 1, 3.3))
-        assert client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": 3.2}).status_code == 201
+        seed(client, forecast(model, a1, 1, 3.4), forecast(model, b1, 1, 3.4))
+        assert client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": 3.36}).status_code == 201
         # B1 gets its own, looser limit: only A1 exceeds.
         assert client.post(ALERT_RULES, headers=supervisor_headers,
-                           json={"max_voltage": 3.5, "cell_id": b1}).status_code == 201
+                           json={"max_voltage": 3.45, "cell_id": b1}).status_code == 201
         items = client.get(FORECASTS, headers=engineer_headers).json()["items"]
-        assert [(i["cell_name"], i["max_voltage"], i["exceeds"]) for i in items] == [("A1", 3.2, True), ("B1", 3.5, False)]
+        assert [(i["cell_name"], i["max_voltage"], i["exceeds"]) for i in items] == [("A1", 3.36, True), ("B1", 3.45, False)]
 
     def test_the_exceeds_filter_keeps_only_the_cells_above_or_within_the_limit(self, client, engineer_headers, supervisor_headers):
         a1, b1, c1 = (create_cell(client, engineer_headers, n)["id"] for n in ("A1", "B1", "C1"))
         model = active_model(client)
-        seed(client, forecast(model, a1, 1, 3.3), forecast(model, b1, 1, 3.1), forecast(model, c1, 1, 3.4),
+        seed(client, forecast(model, a1, 1, 3.4), forecast(model, b1, 1, 3.1), forecast(model, c1, 1, 3.44),
              forecast(model, a1, 2, 3.0), forecast(model, b1, 2, 3.5))
-        client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": 3.2})
+        client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": 3.36})
         both_days = {"date_from": "2026-09-01", "date_to": "2026-09-02"}
 
         def names(**params):
@@ -193,14 +193,20 @@ class TestRequestTraining:  # US005
 
 class TestAlertRules:  # US007-E02
     def test_only_the_supervisor_sets_the_limit(self, client, engineer_headers):
-        assert client.post(ALERT_RULES, headers=engineer_headers, json={"max_voltage": 3.2}).status_code == 403
+        assert client.post(ALERT_RULES, headers=engineer_headers, json={"max_voltage": 3.4}).status_code == 403
 
     def test_a_new_limit_replaces_the_previous_one_of_its_scope(self, client, engineer_headers, supervisor_headers):
-        for volts in (3.2, 3.4):
+        for volts in (3.36, 3.4):
             assert client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": volts}).status_code == 201
         rules = client.get(ALERT_RULES, headers=engineer_headers).json()
         assert [(r["cell_id"], r["max_voltage"]) for r in rules] == [(None, 3.4)]
 
-    def test_rejects_an_unknown_cell_and_a_non_positive_limit(self, client, supervisor_headers):
-        assert client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": 3.2, "cell_id": 99}).status_code == 400
-        assert client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": 0}).status_code == 422
+    def test_rejects_an_unknown_cell(self, client, supervisor_headers):
+        assert client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": 3.4, "cell_id": 99}).status_code == 400
+
+    def test_the_limit_must_be_above_3_35_and_at_most_3_45(self, client, supervisor_headers):
+        def status(volts):
+            return client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": volts}).status_code
+
+        assert [status(v) for v in (0, 3.35, 3.451, 4)] == [422] * 4
+        assert [status(v) for v in (3.351, 3.45)] == [201] * 2

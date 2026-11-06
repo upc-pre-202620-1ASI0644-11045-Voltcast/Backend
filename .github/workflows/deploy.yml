@@ -79,6 +79,10 @@ jobs:
             echo "::add-mask::$firebase"
             secrets+=("firebase-credentials=$firebase")
             env_vars+=(FIREBASE_CREDENTIALS_JSON=secretref:firebase-credentials)
+            # The training Job pushes the alerts it creates right after publishing the model
+            az containerapp job secret set -g $RESOURCE_GROUP -n job-voltcast-training --secrets "firebase-credentials=$firebase" -o none
+            az containerapp job update -g $RESOURCE_GROUP -n job-voltcast-training \
+              --set-env-vars FIREBASE_CREDENTIALS_JSON=secretref:firebase-credentials -o none
           fi
 
           if az containerapp job show -g $RESOURCE_GROUP -n $job -o none 2>/dev/null; then

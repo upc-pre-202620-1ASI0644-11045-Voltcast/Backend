@@ -4,7 +4,7 @@ from functools import partial
 from pathlib import Path
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from shared.infrastructure.persistence.configuration.database_configuration import AsyncSessionLocal
 from shared.infrastructure.queue.task_queue import TRAINING_QUEUE, get_task_queue
@@ -13,6 +13,7 @@ from tests.api.test_etl import run_etl
 from tests.conftest import API
 from tests.excel_files import section_rows, varying_rows, workbook_bytes
 from voltage_forecasting.domain.model.aggregates.ModelEvaluation import ModelEvaluationResult
+from voltage_forecasting.domain.model.aggregates.AlertRule import AlertRule
 from worker.main import run
 from worker.training import config
 from worker.training.pipeline import train
@@ -36,6 +37,16 @@ def db(client, fn):
             return await fn(session)
 
     return client.portal.call(run_query)
+
+
+def force_limit(client, volts: float) -> None:
+    """Sets the general limit straight in the database: the API only accepts 3.35-3.45 V, above the synthetic forecasts."""
+    async def put(session):
+        await session.execute(update(AlertRule).where(AlertRule.cell_id.is_(None)).values(is_active=False))
+        session.add(AlertRule(max_voltage=volts))
+        await session.commit()
+
+    db(client, put)
 
 
 def run_training(client) -> bool:
@@ -126,7 +137,7 @@ class TestTrainModel:  # US005, US006
     def test_flags_the_cells_forecast_above_the_allowed_voltage(self, client, engineer_headers, supervisor_headers):
         request_training(client, engineer_headers, cleaned_dataset(client, engineer_headers))
         run_training(client)
-        client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": 1.0})  # below any real voltage
+        force_limit(client, 1.0)  # below any real voltage
         items = client.get(FORECASTS, headers=engineer_headers).json()["items"]
         assert items and all(i["exceeds"] for i in items)
 
