@@ -39,15 +39,21 @@ async def _ensure_cells(session, names: list[str]) -> int:
     return len(missing)
 
 
+async def _raw_sections(storage, dataset):
+    """The raw sections of a dataset: its file, or its files merged when it has several."""
+    files = [await asyncio.to_thread(read_sections, await storage.read(path), PurePosixPath(path).suffix) for path in dataset.raw_paths]
+    return merge_sections(files)
+
+
 async def _complemented(repository, storage, dataset) -> list:
     """The sections of the datasets this one complements, oldest first (a base can itself complement another)."""
-    paths = []
+    bases = []
     base_id = dataset.base_dataset_id
     while base_id:
         base = await repository.find_by_id(base_id)
-        paths.append(base.storage_path)
+        bases.append(base)
         base_id = base.base_dataset_id
-    return [await asyncio.to_thread(read_sections, await storage.read(path), PurePosixPath(path).suffix) for path in reversed(paths)]
+    return [await _raw_sections(storage, base) for base in reversed(bases)]
 
 
 async def process_etl(message: dict, storage) -> None:
@@ -67,15 +73,16 @@ async def process_etl(message: dict, storage) -> None:
         dataset.start_cleaning()
         await repository.save(dataset)
         try:
-            new = await asyncio.to_thread(read_sections, await storage.read(dataset.storage_path), PurePosixPath(dataset.storage_path).suffix)
+            new = await _raw_sections(storage, dataset)
             check_not_future(new)
             sections = new
             if dataset.base_dataset_id:
+                base = await repository.find_by_id(dataset.base_dataset_id)
+                summary = json.loads(await storage.read(str(PurePosixPath(base.processed_path).with_name("summary.json"))))
+                # Also checked when the merge was accepted without asking (OneDrive): what cannot be bridged is never merged.
+                preview = merge_preview((date.fromisoformat(summary["date_from"]), date.fromisoformat(summary["date_to"])), date_range(new))
                 if not message.get("confirmed"):
                     # First pass: show the user what merging would do and wait for the answer.
-                    base = await repository.find_by_id(dataset.base_dataset_id)
-                    summary = json.loads(await storage.read(str(PurePosixPath(base.processed_path).with_name("summary.json"))))
-                    preview = merge_preview((date.fromisoformat(summary["date_from"]), date.fromisoformat(summary["date_to"])), date_range(new))
                     await storage.save(f"processed/{dataset.id}/merge.json", json.dumps({**preview, "base_dataset_id": base.id}).encode())
                     dataset.await_confirmation()
                     await repository.save(dataset)

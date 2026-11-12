@@ -1,4 +1,4 @@
-"""Usage: python -m worker etl | training | notifications"""
+"""Usage: python -m worker etl | training | notifications | onedrive"""
 import argparse
 import asyncio
 import logging

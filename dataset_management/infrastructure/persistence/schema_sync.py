@@ -17,6 +17,8 @@ async def sync_dataset_management_schema(connection: AsyncConnection) -> None:
                 "ALTER TABLE uploaded_dataset ADD CONSTRAINT fk_uploaded_dataset_base "
                 "FOREIGN KEY (base_dataset_id) REFERENCES uploaded_dataset (id)"
             ))
+    if "extra_paths" not in columns:
+        await connection.execute(text("ALTER TABLE uploaded_dataset ADD COLUMN extra_paths TEXT NULL"))
     if connection.dialect.name == "mysql":  # elsewhere the status is plain text
         await connection.execute(text(
             f"ALTER TABLE uploaded_dataset MODIFY upload_status ENUM({_STATUSES}) NOT NULL DEFAULT 'raw'"
