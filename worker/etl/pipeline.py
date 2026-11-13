@@ -97,13 +97,19 @@ def merge_sections(files: list[Sections]) -> Sections:
     return merged
 
 
+def check_continuity(last_day: date, new: tuple[date, date]) -> int:
+    """Days without records between the last day of the data and a file that covers `new`; raises SchemaError if the file cannot follow it."""
+    gap = (new[0] - last_day).days - 1
+    if new[1] <= last_day:
+        raise SchemaError(f"The file adds no days after {last_day}, the last day of the dataset it complements")
+    if gap > config.MAX_INTERP_DAYS:
+        raise SchemaError(f"There are {gap} days without records between {last_day} and {new[0]}; at most {config.MAX_INTERP_DAYS} can be bridged")
+    return gap
+
+
 def merge_preview(base: tuple[date, date], new: tuple[date, date]) -> dict:
     """What merging a file that covers `new` into a dataset that covers `base` would do; raises SchemaError if it cannot be merged."""
-    gap = (new[0] - base[1]).days - 1
-    if new[1] <= base[1]:
-        raise SchemaError(f"The file adds no days after {base[1]}, the last day of the dataset it complements")
-    if gap > config.MAX_INTERP_DAYS:
-        raise SchemaError(f"There are {gap} days without records between {base[1]} and {new[0]}; at most {config.MAX_INTERP_DAYS} can be bridged")
+    gap = check_continuity(base[1], new)
     days = (new[1] - min(base[0], new[0])).days + 1
     if days < config.MIN_DAYS:
         raise SchemaError(f"Merged, the files cover {days} days; at least {config.MIN_DAYS} are needed")

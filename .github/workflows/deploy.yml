@@ -127,8 +127,82 @@ jobs:
           echo "Could not create $job" >&2
           exit 1
 
+      # Once a day (08:00 UTC, 03:00 in Peru): brings the Excel files of the company's Drive. Created only when the App Service
+      # already has the Google settings (GOOGLE_*, TOKEN_ENCRYPTION_KEY), so deploying before the Google Cloud setup still works.
+      # It reads and writes the same database, blob container and queues as the API.
+      - name: Ensure the Drive Job
+        run: |
+          set -euo pipefail
+          job=job-voltcast-drive
+          image=$REGISTRY.azurecr.io/worker:${GITHUB_SHA::7}
+
+          settings=$(az webapp config appsettings list -g $RESOURCE_GROUP -n $APP_SERVICE -o json)
+          get() { echo "$settings" | jq -r --arg n "$1" '.[] | select(.name == $n) | .value'; }
+          if [ -z "$(get GOOGLE_CLIENT_ID)" ] || [ -z "$(get TOKEN_ENCRYPTION_KEY)" ]; then
+            echo "The Google settings are not in the App Service yet: the Drive Job is not created"
+            exit 0
+          fi
+          for name in DATABASE_URL GOOGLE_CLIENT_SECRET TOKEN_ENCRYPTION_KEY AZURE_STORAGE_CONNECTION_STRING; do
+            echo "::add-mask::$(get $name)"
+          done
+
+          env_vars=(
+            DATABASE_URL=secretref:database-url GOOGLE_CLIENT_SECRET=secretref:google-client-secret
+            TOKEN_ENCRYPTION_KEY=secretref:token-encryption-key AZURE_STORAGE_CONNECTION_STRING=secretref:storage-connection
+            "DB_SSL=$(get DB_SSL)" "GOOGLE_CLIENT_ID=$(get GOOGLE_CLIENT_ID)" "GOOGLE_REDIRECT_URI=$(get GOOGLE_REDIRECT_URI)"
+            "GOOGLE_DRIVE_FOLDER_ID=$(get GOOGLE_DRIVE_FOLDER_ID)" "AZURE_STORAGE_CONTAINER=$(get AZURE_STORAGE_CONTAINER)"
+          )
+          secrets=(
+            "database-url=$(get DATABASE_URL)" "google-client-secret=$(get GOOGLE_CLIENT_SECRET)"
+            "token-encryption-key=$(get TOKEN_ENCRYPTION_KEY)" "storage-connection=$(get AZURE_STORAGE_CONNECTION_STRING)"
+          )
+
+          if az containerapp job show -g $RESOURCE_GROUP -n $job -o none 2>/dev/null; then
+            az containerapp job secret set -g $RESOURCE_GROUP -n $job --secrets "${secrets[@]}" -o none
+            az containerapp job update -g $RESOURCE_GROUP -n $job --set-env-vars "${env_vars[@]}" -o none
+            exit 0
+          fi
+
+          environment=$(az containerapp job show -g $RESOURCE_GROUP -n job-voltcast-etl --query properties.environmentId -o tsv)
+          profile=$(az containerapp job show -g $RESOURCE_GROUP -n job-voltcast-etl --query properties.workloadProfileName -o tsv)
+          extra=()
+          if [ -n "$profile" ] && [ "$profile" != "None" ]; then extra+=(--workload-profile-name "$profile"); fi
+          registry=$(az containerapp job show -g $RESOURCE_GROUP -n job-voltcast-etl --query "properties.configuration.registries[0]" -o json)
+          server=$(echo "$registry" | jq -r '.server')
+          username=$(echo "$registry" | jq -r '.username // empty')
+          identity=$(echo "$registry" | jq -r '.identity // empty')
+          if [ -n "$username" ]; then
+            password=$(az containerapp job secret show -g $RESOURCE_GROUP -n job-voltcast-etl \
+              --secret-name "$(echo "$registry" | jq -r '.passwordSecretRef')" --query value -o tsv)
+            echo "::add-mask::$password"
+            login=(--registry-username "$username" --registry-password "$password")
+          elif [ -n "$identity" ] && [ "$identity" != system ]; then
+            login=(--mi-user-assigned "$identity" --registry-identity "$identity")
+          else
+            echo "The ETL Job pulls with a system identity: create $job by hand and give it the AcrPull role" >&2
+            exit 1
+          fi
+
+          # Reading a big workbook takes memory and time: 2 Gi and 30 minutes.
+          for attempt in 1 2; do
+            if az containerapp job create -g $RESOURCE_GROUP -n $job --environment "$environment" "${extra[@]}" \
+                 --trigger-type Schedule --cron-expression "0 8 * * *" --replica-timeout 1800 --replica-retry-limit 1 \
+                 --cpu 1 --memory 2Gi --image $image --args drive \
+                 --registry-server "$server" "${login[@]}" \
+                 --secrets "${secrets[@]}" --env-vars "${env_vars[@]}" -o none; then
+              exit 0
+            fi
+            az containerapp job delete -g $RESOURCE_GROUP -n $job --yes -o none 2>/dev/null || true
+            sleep 15
+          done
+          echo "Could not create $job" >&2
+          exit 1
+
       - name: Deploy the Jobs
         run: |
-          for job in job-voltcast-etl job-voltcast-training job-voltcast-notifications; do
+          jobs=(job-voltcast-etl job-voltcast-training job-voltcast-notifications)
+          # The Drive Job only exists once the Google settings are in the App Service
+          if az containerapp job show -g $RESOURCE_GROUP -n job-voltcast-drive -o none 2>/dev/null; then jobs+=(job-voltcast-drive); fi
+          for job in "${jobs[@]}"; do
             az containerapp job update -g $RESOURCE_GROUP -n $job --image $REGISTRY.azurecr.io/worker:${GITHUB_SHA::7}
           done

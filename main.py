@@ -20,6 +20,7 @@ from voltage_forecasting.interface.api.rest.controllers.TrainingController impor
 from voltage_forecasting.interface.api.rest.controllers.AlertRuleController import router as alert_rule_router
 from notification_management.domain.model.aggregates.Notification import NOTIFICATION_TYPES, NotificationType
 from notification_management.interface.api.rest.controllers.NotificationController import router as notification_router
+from drive_integration.interface.api.rest.controllers.DriveController import router as drive_router
 # Imported so create_all also creates the tables only the Job writes to.
 from voltage_forecasting.domain.model.aggregates import ModelEvaluation as _model_evaluation  # noqa: F401
 
@@ -103,6 +104,7 @@ app.include_router(forecast_router)
 app.include_router(training_router)
 app.include_router(alert_rule_router)
 app.include_router(notification_router)
+app.include_router(drive_router)
 
 
 @app.get("/")

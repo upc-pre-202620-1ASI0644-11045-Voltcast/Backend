@@ -1,3 +1,4 @@
+import json
 from uuid import uuid4
 
 from dataset_management.domain.model.aggregates.UploadedDataset import DatasetStatus, UploadedDataset
@@ -21,15 +22,25 @@ class DatasetCommandServiceImpl:
         # The stored name is generated: the name the user sent is only kept as a label.
         extension = filename[filename.rfind("."):].lower()
         path = await self._storage.save(f"raw/{uuid4().hex}{extension}", command.content)
+        extra_paths = []
+        for extra_name, extra_content in command.extra_files:
+            extra_name = UploadedDataset.validate_upload(extra_name, extra_content)
+            extra_paths.append(await self._storage.save(f"raw/{uuid4().hex}{extra_name[extra_name.rfind('.'):].lower()}", extra_content))
         if command.base_dataset_id is not None:
             base = await self._repository.find_by_id(command.base_dataset_id)
             if base is None or base.upload_status != DatasetStatus.READY:
                 raise ValueError("The dataset to complement does not exist or is not ready")
         dataset = await self._repository.save(
-            UploadedDataset(filename=filename, storage_path=path, base_dataset_id=command.base_dataset_id)
+            UploadedDataset(
+                filename=filename, storage_path=path, base_dataset_id=command.base_dataset_id,
+                extra_paths=json.dumps(extra_paths) if extra_paths else None,
+            )
         )
         try:
-            await self._queue.send(ETL_QUEUE, {"task": "etl", "dataset_id": dataset.id})
+            message = {"task": "etl", "dataset_id": dataset.id}
+            if command.auto_confirm:
+                message["confirmed"] = True
+            await self._queue.send(ETL_QUEUE, message)
         except Exception:
             dataset.mark_failed("The processing task could not be queued; upload the file again")
             await self._repository.save(dataset)

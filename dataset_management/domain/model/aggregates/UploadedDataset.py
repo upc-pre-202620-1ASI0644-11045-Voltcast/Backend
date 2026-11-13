@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from enum import Enum
 from pathlib import PurePath
@@ -45,9 +46,15 @@ class UploadedDataset(Base):
     base_dataset_id: Mapped[int | None] = mapped_column(
         SmallInt, ForeignKey("uploaded_dataset.id"), nullable=True
     )  # the dataset this file complements: its raw data is merged with this one before cleaning
+    extra_paths: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON list: the other raw files of this dataset (the Drive sync sends several days at once), oldest first
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP, nullable=False, server_default=text("CURRENT_TIMESTAMP")
     )
+
+    @property
+    def raw_paths(self) -> list[str]:
+        """Every raw file of this dataset, oldest first."""
+        return [self.storage_path, *json.loads(self.extra_paths or "[]")]
 
     @staticmethod
     def validate_upload(filename: str, content: bytes) -> str:
