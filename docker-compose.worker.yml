@@ -2,7 +2,7 @@
 #   docker compose -f docker-compose.yml -f docker-compose.worker.yml up --build
 #   docker compose -f docker-compose.yml -f docker-compose.worker.yml run --rm worker etl
 #   docker compose -f docker-compose.yml -f docker-compose.worker.yml run --rm worker notifications  (run it on a schedule)
-#   docker compose -f docker-compose.yml -f docker-compose.worker.yml run --rm worker onedrive  (once a day)
+#   docker compose -f docker-compose.yml -f docker-compose.worker.yml run --rm worker drive  (once a day)
 services:
   backend:
     environment:
@@ -26,13 +26,12 @@ services:
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-}
       FIREBASE_CREDENTIALS_JSON: ${FIREBASE_CREDENTIALS_JSON:-}
-      # only `onedrive` (once a day) talks to Microsoft
-      MS_CLIENT_ID: ${MS_CLIENT_ID:-}
-      MS_CLIENT_SECRET: ${MS_CLIENT_SECRET:-}
-      MS_TENANT_ID: ${MS_TENANT_ID:-consumers}
-      MS_REDIRECT_URI: ${MS_REDIRECT_URI:-}
+      # only `drive` (once a day) talks to Google
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+      GOOGLE_DRIVE_FOLDER_ID: ${GOOGLE_DRIVE_FOLDER_ID:-}
       TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
-      ONEDRIVE_FOLDER: ${ONEDRIVE_FOLDER:-/VoltCast/datasets}
     volumes:
       - storage_data:/data/storage
     depends_on:

@@ -46,7 +46,7 @@ class UploadedDataset(Base):
     base_dataset_id: Mapped[int | None] = mapped_column(
         SmallInt, ForeignKey("uploaded_dataset.id"), nullable=True
     )  # the dataset this file complements: its raw data is merged with this one before cleaning
-    extra_paths: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON list: the other raw files of this dataset (OneDrive sends several days at once), oldest first
+    extra_paths: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON list: the other raw files of this dataset (the Drive sync sends several days at once), oldest first
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP, nullable=False, server_default=text("CURRENT_TIMESTAMP")
     )

@@ -6,8 +6,8 @@ import pytest
 from cryptography.fernet import Fernet
 from sqlalchemy import select
 
-from onedrive_integration.domain.model.aggregates.OneDriveConnection import OneDriveConnection, OneDriveFile
-from shared.infrastructure.microsoft import graph_client
+from drive_integration.domain.model.aggregates.DriveConnection import DriveConnection, DriveFile
+from shared.infrastructure.google import drive_client
 from shared.infrastructure.persistence.configuration.database_configuration import AsyncSessionLocal
 from shared.infrastructure.queue.task_queue import ETL_QUEUE, get_task_queue
 from tests.api.test_datasets import DATASETS
@@ -17,7 +17,7 @@ from tests.conftest import API
 from tests.excel_files import section_rows, workbook_bytes
 from worker.main import run
 
-ONEDRIVE = f"{API}/integrations/onedrive"
+DRIVE = f"{API}/integrations/drive"
 BASE_END = datetime(2026, 1, 30)  # the last day of BASE
 
 
@@ -32,37 +32,37 @@ def after_base(offset: int, count: int) -> bytes:
 
 
 @pytest.fixture
-def graph(monkeypatch) -> SimpleNamespace:
-    """Replaces Microsoft: `files` is the OneDrive folder (name -> bytes); set `invalid_grant` or `fail` to break the sync."""
-    monkeypatch.setenv("MS_CLIENT_ID", "client-id")
-    monkeypatch.setenv("MS_CLIENT_SECRET", "client-secret")
-    monkeypatch.setenv("MS_TENANT_ID", "consumers")
-    monkeypatch.setenv("MS_REDIRECT_URI", "https://backend.example.com/api/v1/integrations/onedrive/callback")
+def gdrive(monkeypatch) -> SimpleNamespace:
+    """Replaces Google: `files` is the Drive folder (name -> bytes); set `invalid_grant` or `fail` to break the sync."""
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "client-id")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("GOOGLE_DRIVE_FOLDER_ID", "folder-id")
+    monkeypatch.setenv("GOOGLE_REDIRECT_URI", "https://backend.example.com/api/v1/integrations/drive/callback")
     monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode())
     fake = SimpleNamespace(files={}, modified={}, folder=True, invalid_grant=False, fail=False, refreshes=0)
 
     async def exchange_code(code):
         if code == "bad":
-            raise ConnectionError("Microsoft refused the code")
+            raise ConnectionError("Google refused the code")
         return {"access_token": "access", "refresh_token": "refresh-secret"}
 
     async def account_email(access_token):
-        return "empresa@outlook.com"
+        return "empresa@gmail.com"
 
     async def refresh(refresh_token):
         fake.refreshes += 1
         if fake.invalid_grant:
-            raise graph_client.InvalidGrant()
+            raise drive_client.InvalidGrant()
         return {"access_token": "access", "refresh_token": "rotated-refresh"}
 
     async def list_folder(access_token, folder):
         if fake.fail:
-            raise ConnectionError("Graph is down")
+            raise ConnectionError("Drive is down")
         if not fake.folder:
             return None
         return [
-            {"id": name, "name": name, "eTag": "v1", "size": len(content), "file": {},
-             "lastModifiedDateTime": fake.modified.get(name, "2020-01-01T00:00:00Z")}
+            {"id": name, "name": name, "version": "v1", "size": len(content),
+             "modified": fake.modified.get(name, "2020-01-01T00:00:00Z")}
             for name, content in fake.files.items()
         ]
 
@@ -70,22 +70,22 @@ def graph(monkeypatch) -> SimpleNamespace:
         return fake.files[item_id]
 
     for function in (exchange_code, account_email, refresh, list_folder, download):
-        monkeypatch.setattr(graph_client, function.__name__, function)
+        monkeypatch.setattr(drive_client, function.__name__, function)
     return fake
 
 
 def connect(client, headers) -> None:
-    url = client.get(f"{ONEDRIVE}/connect", headers=headers).json()["authorizationUrl"]
+    url = client.get(f"{DRIVE}/connect", headers=headers).json()["authorizationUrl"]
     state = parse_qs(urlparse(url).query)["state"][0]
-    assert client.get(f"{ONEDRIVE}/callback", params={"code": "good", "state": state}).status_code == 200
+    assert client.get(f"{DRIVE}/callback", params={"code": "good", "state": state}).status_code == 200
 
 
 def sync(client) -> None:
-    client.portal.call(run, "onedrive")
+    client.portal.call(run, "drive")
 
 
 def status(client, headers) -> dict:
-    return client.get(f"{ONEDRIVE}/status", headers=headers).json()
+    return client.get(f"{DRIVE}/status", headers=headers).json()
 
 
 def datasets(client, headers) -> list[dict]:
@@ -94,7 +94,7 @@ def datasets(client, headers) -> list[dict]:
 
 def files(client) -> dict[str, tuple[str, str | None]]:
     async def read(session):
-        return {f.name: (f.status, f.reason) for f in (await session.execute(select(OneDriveFile))).scalars()}
+        return {f.name: (f.status, f.reason) for f in (await session.execute(select(DriveFile))).scalars()}
 
     async def run_query():
         async with AsyncSessionLocal() as session:
@@ -104,61 +104,62 @@ def files(client) -> dict[str, tuple[str, str | None]]:
 
 
 class TestConnect:
-    def test_the_supervisor_gets_the_microsoft_consent_page(self, client, graph, supervisor_headers):
-        response = client.get(f"{ONEDRIVE}/connect", headers=supervisor_headers)
+    def test_the_supervisor_gets_the_google_consent_page(self, client, gdrive, supervisor_headers):
+        response = client.get(f"{DRIVE}/connect", headers=supervisor_headers)
         assert response.status_code == 200
         url = urlparse(response.json()["authorizationUrl"])
         query = parse_qs(url.query)
-        assert (url.scheme, url.netloc, url.path) == ("https", "login.microsoftonline.com", "/consumers/oauth2/v2.0/authorize")
-        assert query["scope"] == ["Files.Read offline_access User.Read"] and query["client_id"] == ["client-id"]
+        assert (url.scheme, url.netloc, url.path) == ("https", "accounts.google.com", "/o/oauth2/v2/auth")
+        assert query["scope"] == ["https://www.googleapis.com/auth/drive.readonly"] and query["client_id"] == ["client-id"]
+        assert (query["access_type"], query["prompt"]) == (["offline"], ["consent"])
         assert len(query["state"][0]) >= 32
 
-    def test_only_the_supervisor_connects_or_disconnects(self, client, graph, engineer_headers):
-        assert client.get(f"{ONEDRIVE}/connect", headers=engineer_headers).status_code == 403
-        assert client.delete(ONEDRIVE, headers=engineer_headers).status_code == 403
-        assert client.get(f"{ONEDRIVE}/connect").status_code in (401, 403)
+    def test_only_the_supervisor_connects_or_disconnects(self, client, gdrive, engineer_headers):
+        assert client.get(f"{DRIVE}/connect", headers=engineer_headers).status_code == 403
+        assert client.delete(DRIVE, headers=engineer_headers).status_code == 403
+        assert client.get(f"{DRIVE}/connect").status_code in (401, 403)
 
     def test_without_the_azure_settings_it_says_so(self, client, supervisor_headers, monkeypatch):
-        monkeypatch.delenv("MS_CLIENT_ID", raising=False)
-        response = client.get(f"{ONEDRIVE}/connect", headers=supervisor_headers)
-        assert (response.status_code, response.json()["detail"]) == (503, "OneDrive integration is not configured")
+        monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+        response = client.get(f"{DRIVE}/connect", headers=supervisor_headers)
+        assert (response.status_code, response.json()["detail"]) == (503, "Drive integration is not configured")
 
-    def test_the_redirect_has_to_be_https(self, client, graph, supervisor_headers, monkeypatch):
-        monkeypatch.setenv("MS_REDIRECT_URI", "http://backend.example.com/callback")
-        assert client.get(f"{ONEDRIVE}/connect", headers=supervisor_headers).status_code == 503
-        monkeypatch.setenv("MS_REDIRECT_URI", "http://localhost:8000/callback")
-        assert client.get(f"{ONEDRIVE}/connect", headers=supervisor_headers).status_code == 200
+    def test_the_redirect_has_to_be_https(self, client, gdrive, supervisor_headers, monkeypatch):
+        monkeypatch.setenv("GOOGLE_REDIRECT_URI", "http://backend.example.com/callback")
+        assert client.get(f"{DRIVE}/connect", headers=supervisor_headers).status_code == 503
+        monkeypatch.setenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/callback")
+        assert client.get(f"{DRIVE}/connect", headers=supervisor_headers).status_code == 200
 
-    def test_the_callback_stores_the_connection_with_the_token_encrypted(self, client, graph, supervisor_headers):
+    def test_the_callback_stores_the_connection_with_the_token_encrypted(self, client, gdrive, supervisor_headers):
         connect(client, supervisor_headers)
-        assert status(client, supervisor_headers)["account"] == "empresa@outlook.com"
+        assert status(client, supervisor_headers)["account"] == "empresa@gmail.com"
 
         async def stored():
             async with AsyncSessionLocal() as session:
-                return (await session.get(OneDriveConnection, 1)).refresh_token
+                return (await session.get(DriveConnection, 1)).refresh_token
 
         assert "refresh-secret" not in client.portal.call(stored)
 
-    def test_the_state_works_once(self, client, graph, supervisor_headers):
-        url = client.get(f"{ONEDRIVE}/connect", headers=supervisor_headers).json()["authorizationUrl"]
+    def test_the_state_works_once(self, client, gdrive, supervisor_headers):
+        url = client.get(f"{DRIVE}/connect", headers=supervisor_headers).json()["authorizationUrl"]
         state = parse_qs(urlparse(url).query)["state"][0]
-        assert client.get(f"{ONEDRIVE}/callback", params={"code": "good", "state": state}).status_code == 200
-        reused = client.get(f"{ONEDRIVE}/callback", params={"code": "good", "state": state})
+        assert client.get(f"{DRIVE}/callback", params={"code": "good", "state": state}).status_code == 200
+        reused = client.get(f"{DRIVE}/callback", params={"code": "good", "state": state})
         assert reused.status_code == 400
 
-    def test_failures_show_a_generic_page(self, client, graph, supervisor_headers):
+    def test_failures_show_a_generic_page(self, client, gdrive, supervisor_headers):
         for params in ({"code": "good", "state": "invented"}, {"error": "access_denied", "state": "x"}, {}):
-            page = client.get(f"{ONEDRIVE}/callback", params=params)
+            page = client.get(f"{DRIVE}/callback", params=params)
             assert page.status_code == 400 and "No se pudo completar la conexión" in page.text
             assert "invented" not in page.text and "access_denied" not in page.text
-        url = client.get(f"{ONEDRIVE}/connect", headers=supervisor_headers).json()["authorizationUrl"]
+        url = client.get(f"{DRIVE}/connect", headers=supervisor_headers).json()["authorizationUrl"]
         state = parse_qs(urlparse(url).query)["state"][0]
-        refused = client.get(f"{ONEDRIVE}/callback", params={"code": "bad", "state": state})
-        assert refused.status_code == 400 and "Microsoft" not in refused.text
+        refused = client.get(f"{DRIVE}/callback", params={"code": "bad", "state": state})
+        assert refused.status_code == 400 and "Google" not in refused.text
         assert status(client, supervisor_headers)["connected"] is False
 
-    def test_a_demoted_supervisor_cannot_finish_the_connection(self, client, graph, supervisor_headers):
-        url = client.get(f"{ONEDRIVE}/connect", headers=supervisor_headers).json()["authorizationUrl"]
+    def test_a_demoted_supervisor_cannot_finish_the_connection(self, client, gdrive, supervisor_headers):
+        url = client.get(f"{DRIVE}/connect", headers=supervisor_headers).json()["authorizationUrl"]
         state = parse_qs(urlparse(url).query)["state"][0]
 
         async def disable():
@@ -169,9 +170,9 @@ class TestConnect:
                 await session.commit()
 
         client.portal.call(disable)
-        assert client.get(f"{ONEDRIVE}/callback", params={"code": "good", "state": state}).status_code == 400
+        assert client.get(f"{DRIVE}/callback", params={"code": "good", "state": state}).status_code == 400
 
-    def test_connecting_again_replaces_the_connection(self, client, graph, supervisor_headers):
+    def test_connecting_again_replaces_the_connection(self, client, gdrive, supervisor_headers):
         connect(client, supervisor_headers)
         connect(client, supervisor_headers)
         assert status(client, supervisor_headers)["connected"] is True
@@ -181,79 +182,79 @@ class TestStatus:
     def test_without_a_connection(self, client, engineer_headers):
         assert status(client, engineer_headers) == {"connected": False, "account": None, "lastSyncAt": None, "error": None, "connectedAt": None}
 
-    def test_every_user_reads_it(self, client, graph, supervisor_headers, engineer_headers):
+    def test_every_user_reads_it(self, client, gdrive, supervisor_headers, engineer_headers):
         connect(client, supervisor_headers)
         body = status(client, engineer_headers)
-        assert (body["connected"], body["account"], body["error"], body["lastSyncAt"]) == (True, "empresa@outlook.com", None, None)
+        assert (body["connected"], body["account"], body["error"], body["lastSyncAt"]) == (True, "empresa@gmail.com", None, None)
         assert body["connectedAt"].endswith("Z") or "+00:00" in body["connectedAt"]
-        assert client.get(f"{ONEDRIVE}/status").status_code in (401, 403)
+        assert client.get(f"{DRIVE}/status").status_code in (401, 403)
 
-    def test_disconnecting_deletes_the_connection_and_keeps_the_datasets(self, client, graph, supervisor_headers):
+    def test_disconnecting_deletes_the_connection_and_keeps_the_datasets(self, client, gdrive, supervisor_headers):
         ready_base(client, supervisor_headers)
         connect(client, supervisor_headers)
-        assert client.delete(ONEDRIVE, headers=supervisor_headers).status_code == 204
-        assert client.delete(ONEDRIVE, headers=supervisor_headers).status_code == 204
+        assert client.delete(DRIVE, headers=supervisor_headers).status_code == 204
+        assert client.delete(DRIVE, headers=supervisor_headers).status_code == 204
         assert status(client, supervisor_headers)["connected"] is False
         assert len(datasets(client, supervisor_headers)) == 1
 
 
 class TestSyncErrors:
-    def test_nothing_happens_without_a_connection(self, client, graph):
-        graph.files["a.xlsx"] = after_base(1, 5)
+    def test_nothing_happens_without_a_connection(self, client, gdrive):
+        gdrive.files["a.xlsx"] = after_base(1, 5)
         sync(client)
-        assert graph.refreshes == 0
+        assert gdrive.refreshes == 0
 
-    def test_invalid_grant_stops_the_sync_and_is_not_retried(self, client, graph, supervisor_headers):
+    def test_invalid_grant_stops_the_sync_and_is_not_retried(self, client, gdrive, supervisor_headers):
         connect(client, supervisor_headers)
-        graph.invalid_grant = True
+        gdrive.invalid_grant = True
         sync(client)
         assert status(client, supervisor_headers)["error"] == "invalid_grant"
         sync(client)
-        assert graph.refreshes == 1  # the second run did not even ask Microsoft
+        assert gdrive.refreshes == 1  # the second run did not even ask Google
         connect(client, supervisor_headers)  # connecting again clears it
         assert status(client, supervisor_headers)["error"] is None
 
-    def test_a_failed_run_keeps_the_last_success_and_is_retried(self, client, graph, supervisor_headers):
+    def test_a_failed_run_keeps_the_last_success_and_is_retried(self, client, gdrive, supervisor_headers):
         connect(client, supervisor_headers)
         sync(client)
         done = status(client, supervisor_headers)["lastSyncAt"]
         assert done is not None
-        graph.fail = True
+        gdrive.fail = True
         sync(client)
         failed = status(client, supervisor_headers)
         assert (failed["error"], failed["lastSyncAt"]) == ("sync_failed", done)
-        graph.fail = False
+        gdrive.fail = False
         sync(client)
         assert status(client, supervisor_headers)["error"] is None
 
-    def test_a_missing_folder_is_not_an_error(self, client, graph, supervisor_headers):
+    def test_a_missing_folder_is_not_an_error(self, client, gdrive, supervisor_headers):
         connect(client, supervisor_headers)
-        graph.folder = False
+        gdrive.folder = False
         sync(client)
         assert status(client, supervisor_headers)["error"] is None
 
-    def test_the_rotated_refresh_token_is_kept(self, client, graph, supervisor_headers, monkeypatch):
+    def test_the_rotated_refresh_token_is_kept(self, client, gdrive, supervisor_headers, monkeypatch):
         connect(client, supervisor_headers)
         used = []
-        original = graph_client.refresh
+        original = drive_client.refresh
 
         async def spy(refresh_token):
             used.append(refresh_token)
             return await original(refresh_token)
 
-        monkeypatch.setattr(graph_client, "refresh", spy)
+        monkeypatch.setattr(drive_client, "refresh", spy)
         sync(client)
         sync(client)
         assert used == ["refresh-secret", "rotated-refresh"]
 
 
 class TestSyncDatasets:
-    def test_the_first_files_become_the_first_dataset_once_they_can_be_trained_on(self, client, graph, supervisor_headers):
+    def test_the_first_files_become_the_first_dataset_once_they_can_be_trained_on(self, client, gdrive, supervisor_headers):
         connect(client, supervisor_headers)
-        graph.files["part1.xlsx"] = days(datetime(2026, 1, 1), 6)  # the tests train with 10 days
+        gdrive.files["part1.xlsx"] = days(datetime(2026, 1, 1), 6)  # the tests train with 10 days
         sync(client)
         assert datasets(client, supervisor_headers) == []
-        graph.files["part2.xlsx"] = days(datetime(2026, 1, 7), 6)
+        gdrive.files["part2.xlsx"] = days(datetime(2026, 1, 7), 6)
         sync(client)
         [created] = datasets(client, supervisor_headers)
         assert created["base_dataset_id"] is None
@@ -261,22 +262,22 @@ class TestSyncDatasets:
         ready = dataset(client, supervisor_headers, created["id"])
         assert (ready["upload_status"], ready["summary"]["days"]) == ("ready", 12)
 
-    def test_a_week_of_new_records_is_not_enough_to_retrain(self, client, graph, supervisor_headers):
+    def test_a_week_of_new_records_is_not_enough_to_retrain(self, client, gdrive, supervisor_headers):
         ready_base(client, supervisor_headers)
         connect(client, supervisor_headers)
-        graph.files["w1.xlsx"] = after_base(1, 7)
-        graph.files["w2.xlsx"] = after_base(8, 7)
+        gdrive.files["w1.xlsx"] = after_base(1, 7)
+        gdrive.files["w2.xlsx"] = after_base(8, 7)
         sync(client)
         assert len(datasets(client, supervisor_headers)) == 1
         assert {name: state for name, (state, _) in files(client).items()} == {"w1.xlsx": "pending", "w2.xlsx": "pending"}
         assert get_task_queue().pending(ETL_QUEUE) == []
         assert status(client, supervisor_headers)["error"] is None
 
-    def test_thirty_new_days_make_one_dataset_that_complements_the_last_one_and_trains(self, client, graph, supervisor_headers):
+    def test_thirty_new_days_make_one_dataset_that_complements_the_last_one_and_trains(self, client, gdrive, supervisor_headers):
         base_id = ready_base(client, supervisor_headers)
         connect(client, supervisor_headers)
         for week, offset in enumerate((1, 11, 21)):
-            graph.files[f"w{week}.xlsx"] = after_base(offset, 10)
+            gdrive.files[f"w{week}.xlsx"] = after_base(offset, 10)
         sync(client)
         [created] = [d for d in datasets(client, supervisor_headers) if d["id"] != base_id]
         assert created["base_dataset_id"] == base_id
@@ -289,21 +290,21 @@ class TestSyncDatasets:
         sync(client)  # nothing new: no second dataset
         assert len(datasets(client, supervisor_headers)) == 2
 
-    def test_a_file_with_the_whole_history_works_too(self, client, graph, supervisor_headers):
+    def test_a_file_with_the_whole_history_works_too(self, client, gdrive, supervisor_headers):
         base_id = ready_base(client, supervisor_headers)
         connect(client, supervisor_headers)
-        graph.files["history.xlsx"] = days(datetime(2026, 1, 1), 65)  # the base and 35 days more
+        gdrive.files["history.xlsx"] = days(datetime(2026, 1, 1), 65)  # the base and 35 days more
         sync(client)
         [created] = [d for d in datasets(client, supervisor_headers) if d["id"] != base_id]
         run_etl(client)
         assert dataset(client, supervisor_headers, created["id"])["summary"]["days"] == 65
 
-    def test_a_file_without_new_days_is_not_taken_into_account(self, client, graph, supervisor_headers):
+    def test_a_file_without_new_days_is_not_taken_into_account(self, client, gdrive, supervisor_headers):
         ready_base(client, supervisor_headers)
         connect(client, supervisor_headers)
-        graph.files["old.xlsx"] = days(datetime(2026, 1, 1), 30)  # the same days the dataset already has
-        graph.files["notes.xlsx"] = b"not a workbook"
-        graph.files["readme.txt"] = b"ignored"
+        gdrive.files["old.xlsx"] = days(datetime(2026, 1, 1), 30)  # the same days the dataset already has
+        gdrive.files["notes.xlsx"] = b"not a workbook"
+        gdrive.files["readme.txt"] = b"ignored"
         sync(client)
         found = files(client)
         assert set(found) == {"old.xlsx", "notes.xlsx"}
@@ -311,46 +312,46 @@ class TestSyncDatasets:
         assert found["notes.xlsx"][0] == "rejected"
         assert len(datasets(client, supervisor_headers)) == 1 and status(client, supervisor_headers)["error"] is None
 
-    def test_a_file_is_looked_at_once_per_version(self, client, graph, supervisor_headers, monkeypatch):
+    def test_a_file_is_looked_at_once_per_version(self, client, gdrive, supervisor_headers, monkeypatch):
         ready_base(client, supervisor_headers)
         connect(client, supervisor_headers)
-        graph.files["w1.xlsx"] = after_base(1, 7)
+        gdrive.files["w1.xlsx"] = after_base(1, 7)
         downloads = []
-        original = graph_client.download
+        original = drive_client.download
 
         async def counting(access_token, item_id):
             downloads.append(item_id)
             return await original(access_token, item_id)
 
-        monkeypatch.setattr(graph_client, "download", counting)
+        monkeypatch.setattr(drive_client, "download", counting)
         sync(client)
         sync(client)
         assert downloads == ["w1.xlsx"]
 
-    def test_a_file_still_being_uploaded_waits(self, client, graph, supervisor_headers):
+    def test_a_file_still_being_uploaded_waits(self, client, gdrive, supervisor_headers):
         ready_base(client, supervisor_headers)
         connect(client, supervisor_headers)
-        graph.files["w1.xlsx"] = after_base(1, 7)
-        graph.modified["w1.xlsx"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        gdrive.files["w1.xlsx"] = after_base(1, 7)
+        gdrive.modified["w1.xlsx"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         sync(client)
         assert files(client) == {}
 
-    def test_a_gap_holds_the_file_until_the_days_in_between_arrive(self, client, graph, supervisor_headers):
+    def test_a_gap_holds_the_file_until_the_days_in_between_arrive(self, client, gdrive, supervisor_headers):
         ready_base(client, supervisor_headers)
         connect(client, supervisor_headers)
-        graph.files["late.xlsx"] = after_base(30, 10)  # 29 days missing; at most 12 are bridged
+        gdrive.files["late.xlsx"] = after_base(30, 10)  # 29 days missing; at most 12 are bridged
         sync(client)
         state, reason = files(client)["late.xlsx"]
         assert state == "held" and "without records" in reason
-        graph.files["middle.xlsx"] = after_base(1, 28)
+        gdrive.files["middle.xlsx"] = after_base(1, 28)
         sync(client)
         assert {name: state for name, (state, _) in files(client).items()} == {"late.xlsx": "consumed", "middle.xlsx": "consumed"}
         assert len(datasets(client, supervisor_headers)) == 2
 
-    def test_while_a_training_runs_the_files_wait_for_the_next_run(self, client, graph, supervisor_headers):
+    def test_while_a_training_runs_the_files_wait_for_the_next_run(self, client, gdrive, supervisor_headers):
         ready_base(client, supervisor_headers)  # its training counts as done
         connect(client, supervisor_headers)
-        graph.files["month.xlsx"] = after_base(1, 35)
+        gdrive.files["month.xlsx"] = after_base(1, 35)
 
         async def start_training():
             from voltage_forecasting.domain.model.aggregates.TrainingExecution import TrainingExecution, TrainingStatus
@@ -366,3 +367,50 @@ class TestSyncDatasets:
         client.portal.call(finish_training, client)
         sync(client)
         assert len(datasets(client, supervisor_headers)) == 2
+
+
+class Reply:
+    """What aiohttp returns for a request, enough for the client."""
+
+    def __init__(self, body, status=200):
+        self._body, self.status = body, status
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *error):
+        return False
+
+    async def json(self):
+        return self._body
+
+    def raise_for_status(self):
+        assert self.status < 400
+
+
+class TestDriveClient:
+    def run_list(self, monkeypatch, folder_reply, pages):
+        import asyncio
+
+        calls = []
+
+        async def fake_get(session, path, access_token, **params):
+            calls.append((path, params.get("pageToken")))
+            return folder_reply if path.startswith("files/") else Reply(pages[len(calls) - 2])
+
+        monkeypatch.setattr(drive_client, "_get", fake_get)
+        return asyncio.run(drive_client.list_folder("token", "folder-id")), calls
+
+    def test_lists_the_excel_files_of_all_the_pages_and_leaves_out_google_documents(self, monkeypatch):
+        pages = [
+            {"files": [{"id": "1", "name": "a.xlsx", "md5Checksum": "m1", "size": "2048", "modifiedTime": "2026-01-01T00:00:00.000Z"},
+                       {"id": "2", "name": "Sheet", "modifiedTime": "2026-01-01T00:00:00.000Z"}], "nextPageToken": "next"},
+            {"files": [{"id": "3", "name": "b.xlsx", "md5Checksum": "m3", "size": "10", "modifiedTime": "2026-01-02T00:00:00.000Z"}]},
+        ]
+        items, calls = self.run_list(monkeypatch, Reply({"id": "folder-id", "trashed": False}), pages)
+        assert [(i["id"], i["name"], i["version"], i["size"]) for i in items] == [("1", "a.xlsx", "m1", 2048), ("3", "b.xlsx", "m3", 10)]
+        assert calls == [("files/folder-id", None), ("files", None), ("files", "next")]
+
+    def test_a_missing_or_trashed_folder_is_none(self, monkeypatch):
+        assert self.run_list(monkeypatch, Reply({}, status=404), [])[0] is None
+        assert self.run_list(monkeypatch, Reply({"id": "folder-id", "trashed": True}), [])[0] is None

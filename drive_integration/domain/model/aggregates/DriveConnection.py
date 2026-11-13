@@ -17,9 +17,9 @@ FILE_CONSUMED = "consumed"  # part of a dataset
 FILE_REJECTED = "rejected"  # not an Excel with voltages, or it adds no new days; `reason` says why
 
 
-class OneDriveConnection(Base):
-    """The company's OneDrive account. There is only one (id 1): connecting again replaces it. The token is encrypted."""
-    __tablename__ = "onedrive_connection"
+class DriveConnection(Base):
+    """The company's Drive account. There is only one (id 1): connecting again replaces it. The token is encrypted."""
+    __tablename__ = "drive_connection"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     account: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -29,9 +29,9 @@ class OneDriveConnection(Base):
     connected_at: Mapped[datetime] = mapped_column(TIMESTAMP, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
 
 
-class OneDriveOAuthState(Base):
+class DriveOAuthState(Base):
     """The `state` of one authorization request: random, single use, short lived and tied to the supervisor who asked. Only its hash is kept."""
-    __tablename__ = "onedrive_oauth_state"
+    __tablename__ = "drive_oauth_state"
 
     state_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
     user_id: Mapped[int] = mapped_column(TinyInt, ForeignKey("user.id", ondelete="CASCADE", onupdate="CASCADE"), nullable=False)
@@ -39,19 +39,19 @@ class OneDriveOAuthState(Base):
     used: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("0"))
 
 
-class OneDriveFile(Base):
-    """A file of the OneDrive folder the sync has seen, by id and version (eTag), so each version is looked at once."""
-    __tablename__ = "onedrive_file"
-    __table_args__ = (UniqueConstraint("item_id", "etag"),)
+class DriveFile(Base):
+    """A file of the Drive folder the sync has seen, by id and version (checksum), so each version is looked at once."""
+    __tablename__ = "drive_file"
+    __table_args__ = (UniqueConstraint("item_id", "version"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     item_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    etag: Mapped[str] = mapped_column(String(255), nullable=False)
+    version: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(10), nullable=False)
     reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     date_from: Mapped[date | None] = mapped_column(Date, nullable=True)
     date_to: Mapped[date | None] = mapped_column(Date, nullable=True)
-    storage_path: Mapped[str | None] = mapped_column(String(255), nullable=True)  # a copy, so the dataset does not depend on OneDrive later
+    storage_path: Mapped[str | None] = mapped_column(String(255), nullable=True)  # a copy, so the dataset does not depend on Drive later
     dataset_id: Mapped[int | None] = mapped_column(SmallInt, ForeignKey("uploaded_dataset.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, nullable=False, server_default=text("CURRENT_TIMESTAMP"))

@@ -79,7 +79,7 @@ async def process_etl(message: dict, storage) -> None:
             if dataset.base_dataset_id:
                 base = await repository.find_by_id(dataset.base_dataset_id)
                 summary = json.loads(await storage.read(str(PurePosixPath(base.processed_path).with_name("summary.json"))))
-                # Also checked when the merge was accepted without asking (OneDrive): what cannot be bridged is never merged.
+                # Also checked when the merge was accepted without asking (Drive): what cannot be bridged is never merged.
                 preview = merge_preview((date.fromisoformat(summary["date_from"]), date.fromisoformat(summary["date_to"])), date_range(new))
                 if not message.get("confirmed"):
                     # First pass: show the user what merging would do and wait for the answer.

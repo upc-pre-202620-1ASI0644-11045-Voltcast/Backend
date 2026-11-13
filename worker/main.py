@@ -4,7 +4,7 @@ from shared.infrastructure.queue.task_queue import ETL_QUEUE, TRAINING_QUEUE, ge
 from shared.infrastructure.storage.file_storage import get_file_storage
 from worker.tasks.etl_task import process_etl
 from worker.tasks.notifications_task import process_notifications
-from worker.tasks.onedrive_sync import process_onedrive_sync
+from worker.tasks.drive_sync import process_drive_sync
 from worker.tasks.training_task import process_training
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ TASKS = {"etl": (ETL_QUEUE, process_etl), "training": (TRAINING_QUEUE, process_t
 
 
 # Tasks started by a schedule (a Container Apps Job with a cron trigger), not by a queued message
-SCHEDULED = {"notifications": process_notifications, "onedrive": process_onedrive_sync}
+SCHEDULED = {"notifications": process_notifications, "drive": process_drive_sync}
 
 
 async def run(task: str) -> bool:

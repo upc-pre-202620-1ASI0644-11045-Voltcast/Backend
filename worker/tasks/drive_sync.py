@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import os
 from datetime import datetime, timedelta, timezone
 from pathlib import PurePosixPath
 from uuid import uuid4
@@ -14,12 +13,12 @@ from dataset_management.domain.model.aggregates.UploadedDataset import (
 )
 from dataset_management.domain.model.commands.DatasetCommands import UploadDatasetCommand
 from dataset_management.infrastructure.persistence.repositories.DatasetRepositoryImpl import DatasetRepositoryImpl
-from onedrive_integration.application.internal.OneDriveServiceImpl import utcnow
-from onedrive_integration.domain.model.aggregates.OneDriveConnection import (
+from drive_integration.application.internal.DriveServiceImpl import utcnow
+from drive_integration.domain.model.aggregates.DriveConnection import (
     ERROR_INVALID_GRANT, ERROR_SYNC_FAILED, FILE_CONSUMED, FILE_HELD, FILE_PENDING, FILE_REJECTED,
-    OneDriveConnection, OneDriveFile,
+    DriveConnection, DriveFile,
 )
-from shared.infrastructure.microsoft import graph_client as graph, token_cipher
+from shared.infrastructure.google import drive_client as gdrive, token_cipher
 from shared.infrastructure.persistence.configuration.database_configuration import AsyncSessionLocal
 from shared.infrastructure.queue.task_queue import get_task_queue
 from shared.infrastructure.storage.file_storage import get_file_storage
@@ -34,22 +33,18 @@ RETRAIN_MIN_NEW_DAYS = 30  # new days of records, beyond the last dataset, befor
 SETTLE = timedelta(seconds=60)  # a file modified more recently may still be uploading
 
 
-def _folder() -> str:
-    return os.getenv("ONEDRIVE_FOLDER", "/VoltCast/datasets")
-
-
-async def process_onedrive_sync() -> None:
+async def process_drive_sync() -> None:
     """
-    One run of the daily Job. Brings the new Excel files of the OneDrive folder, keeps the ones that continue the data
+    One run of the daily Job. Brings the new Excel files of the Drive folder, keeps the ones that continue the data
     and, once they add RETRAIN_MIN_NEW_DAYS days, makes ONE dataset with all of them: the ETL cleans it and, as with any
     ready dataset, trains on it. Safe to repeat: every file version is looked at once.
     """
     async with AsyncSessionLocal() as session:
-        await sync_onedrive(session, get_file_storage(), get_task_queue())
+        await sync_drive(session, get_file_storage(), get_task_queue())
 
 
-async def sync_onedrive(session, storage, queue) -> None:
-    connection = await session.get(OneDriveConnection, 1)
+async def sync_drive(session, storage, queue) -> None:
+    connection = await session.get(DriveConnection, 1)
     if connection is None or connection.error == ERROR_INVALID_GRANT:
         return  # nothing to sync, or the account has to be connected again: no retries in a loop
     try:
@@ -57,14 +52,14 @@ async def sync_onedrive(session, storage, queue) -> None:
         await _collect(session, storage, access_token)
         await _create_dataset_if_due(session, storage, queue)
         error = None
-    except graph.InvalidGrant:
+    except gdrive.InvalidGrant:
         error = ERROR_INVALID_GRANT
     except Exception:
-        logger.exception("The OneDrive sync failed")
+        logger.exception("The Drive sync failed")
         error = ERROR_SYNC_FAILED
     if error:
         await session.rollback()
-    connection = await session.get(OneDriveConnection, 1)  # may have been disconnected or reconnected meanwhile
+    connection = await session.get(DriveConnection, 1)  # may have been disconnected or reconnected meanwhile
     if connection is not None:
         connection.error = error
         if error is None:
@@ -73,8 +68,8 @@ async def sync_onedrive(session, storage, queue) -> None:
 
 
 async def _access_token(session, connection) -> str:
-    tokens = await graph.refresh(token_cipher.decrypt(connection.refresh_token))
-    if tokens.get("refresh_token"):  # Microsoft rotates it: the old one may stop working
+    tokens = await gdrive.refresh(token_cipher.decrypt(connection.refresh_token))
+    if tokens.get("refresh_token"):  # Google keeps it, but if it sends another one that is the valid one
         connection.refresh_token = token_cipher.encrypt(tokens["refresh_token"])
         await session.commit()
     return tokens["access_token"]
@@ -91,14 +86,14 @@ async def _base(session, storage) -> tuple[UploadedDataset, object, object] | No
     return dataset, datetime.fromisoformat(summary["date_from"]).date(), datetime.fromisoformat(summary["date_to"]).date()
 
 
-async def _look_at(session, storage, access_token: str, item: dict) -> OneDriveFile:
+async def _look_at(session, storage, access_token: str, item: dict) -> DriveFile:
     """Downloads one new file version and records what it is: its days, or why it is rejected."""
-    row = OneDriveFile(item_id=item["id"], etag=item["eTag"], name=item["name"], status=FILE_REJECTED)
+    row = DriveFile(item_id=item["id"], version=item["version"], name=item["name"], status=FILE_REJECTED)
     suffix = PurePosixPath(item["name"]).suffix.lower()
     if item.get("size", 0) > MAX_UPLOAD_BYTES:
         row.reason = f"The file exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit"
         return row
-    content = await graph.download(access_token, item["id"])
+    content = await gdrive.download(access_token, item["id"])
     try:
         UploadedDataset.validate_upload(item["name"], content)
         sections = await asyncio.to_thread(read_sections, content, suffix)
@@ -108,35 +103,35 @@ async def _look_at(session, storage, access_token: str, item: dict) -> OneDriveF
         row.reason = str(error)[:500]
         return row
     except Exception:
-        logger.exception("OneDrive file %s could not be read", item["name"])
+        logger.exception("Drive file %s could not be read", item["name"])
         row.reason = "The file could not be read"
         return row
     row.status = FILE_HELD  # until it is checked against the days before it
-    row.storage_path = await storage.save(f"onedrive/{uuid4().hex}{suffix}", content)
+    row.storage_path = await storage.save(f"drive/{uuid4().hex}{suffix}", content)
     return row
 
 
 async def _collect(session, storage, access_token: str) -> None:
-    items = await graph.list_folder(access_token, _folder())
+    items = await gdrive.list_folder(access_token, gdrive.folder_id())
     if items is None:
-        logger.info("The OneDrive folder %s does not exist yet", _folder())
+        logger.info("The Drive folder does not exist (or is in the trash)")
         return
-    known = {tuple(pair) for pair in (await session.execute(select(OneDriveFile.item_id, OneDriveFile.etag))).all()}
+    known = {tuple(pair) for pair in (await session.execute(select(DriveFile.item_id, DriveFile.version))).all()}
     settled = datetime.now(timezone.utc) - SETTLE
-    for item in sorted(items, key=lambda i: i["lastModifiedDateTime"]):
-        if "file" not in item or PurePosixPath(item["name"]).suffix.lower() not in ALLOWED_EXTENSIONS:
+    for item in sorted(items, key=lambda i: i["modified"]):
+        if PurePosixPath(item["name"]).suffix.lower() not in ALLOWED_EXTENSIONS:
             continue
-        if (item["id"], item["eTag"]) in known or datetime.fromisoformat(item["lastModifiedDateTime"]) > settled:
+        if (item["id"], item["version"]) in known or datetime.fromisoformat(item["modified"]) > settled:
             continue
         session.add(await _look_at(session, storage, access_token, item))
         await session.commit()  # one file at a time: a failure later does not lose what was already downloaded
 
     # Held files (a gap before them) are checked again: the days they were missing may have arrived.
     base = await _base(session, storage)
-    pending = (await session.execute(select(OneDriveFile).where(OneDriveFile.status == FILE_PENDING))).scalars().all()
+    pending = (await session.execute(select(DriveFile).where(DriveFile.status == FILE_PENDING))).scalars().all()
     frontier = max([f.date_to for f in pending] + ([base[2]] if base else []), default=None)
     held = (await session.execute(
-        select(OneDriveFile).where(OneDriveFile.status == FILE_HELD).order_by(OneDriveFile.date_from, OneDriveFile.id)
+        select(DriveFile).where(DriveFile.status == FILE_HELD).order_by(DriveFile.date_from, DriveFile.id)
     )).scalars().all()
     for file in held:
         if frontier is None:  # the first data ever: nothing to continue
@@ -156,7 +151,7 @@ async def _collect(session, storage, access_token: str) -> None:
 
 async def _create_dataset_if_due(session, storage, queue) -> None:
     pending = (await session.execute(
-        select(OneDriveFile).where(OneDriveFile.status == FILE_PENDING).order_by(OneDriveFile.date_from, OneDriveFile.id)
+        select(DriveFile).where(DriveFile.status == FILE_PENDING).order_by(DriveFile.date_from, DriveFile.id)
     )).scalars().all()
     if not pending:
         return
@@ -169,7 +164,7 @@ async def _create_dataset_if_due(session, storage, queue) -> None:
         new_days = (last_day - pending[0].date_from).days + 1
         due = new_days >= config.MIN_DAYS
     if not due:
-        logger.info("OneDrive: %s days of new records, waiting for more before a dataset is made", new_days)
+        logger.info("Drive: %s days of new records, waiting for more before a dataset is made", new_days)
         return
     files = [(f.name, await storage.read(f.storage_path)) for f in pending]
     service = DatasetCommandServiceImpl(
@@ -181,9 +176,9 @@ async def _create_dataset_if_due(session, storage, queue) -> None:
             auto_confirm=True, extra_files=tuple(files[1:]),
         ))
     except ValueError as error:  # a training is in progress: the files stay pending for the next run
-        logger.info("OneDrive: the dataset was not created (%s)", error)
+        logger.info("Drive: the dataset was not created (%s)", error)
         return
     for file in pending:
         file.status, file.dataset_id = FILE_CONSUMED, dataset.id
     await session.commit()
-    logger.info("OneDrive: dataset %s made from %s files", dataset.id, len(pending))
+    logger.info("Drive: dataset %s made from %s files", dataset.id, len(pending))

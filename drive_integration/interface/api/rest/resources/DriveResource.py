@@ -7,7 +7,7 @@ class AuthorizationUrlResponse(BaseModel):
     authorizationUrl: str
 
 
-class OneDriveStatusResponse(BaseModel):
+class DriveStatusResponse(BaseModel):
     connected: bool
     account: str | None
     lastSyncAt: datetime | None  # the last time a sync finished without error

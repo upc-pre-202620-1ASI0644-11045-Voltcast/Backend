@@ -2,7 +2,7 @@ import os
 
 from cryptography.fernet import Fernet
 
-from shared.infrastructure.microsoft.graph_client import NotConfigured
+from shared.infrastructure.google.drive_client import NotConfigured
 
 
 def _fernet() -> Fernet:
