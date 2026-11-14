@@ -50,6 +50,8 @@ def _frame(title: str, rows) -> pd.DataFrame:
         raise SchemaError(f"Sheet '{title}' is empty")
     data = [r for r in rows if any(v is not None for v in r)]
     df = pd.DataFrame(data, columns=[_header_to_text(h) for h in header])
+    for c in df.columns[df.isna().all()]:  # a column without any value (a cell out of service the whole period) is not text: it is a gap
+        df[c] = df[c].astype(float)
     # Columns without a header and completely empty are the borders of the sheet.
     return df.drop(columns=[c for c in df.columns if c == "" and df[c].isna().all()])
 

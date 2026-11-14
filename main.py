@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy import select
@@ -25,6 +26,19 @@ from drive_integration.interface.api.rest.controllers.DriveController import rou
 from voltage_forecasting.domain.model.aggregates import ModelEvaluation as _model_evaluation  # noqa: F401
 
 logger = logging.getLogger(__name__)
+
+
+class HideOAuthParams(logging.Filter):
+    """The access log prints the whole URL, and the OAuth callback carries the authorization code and the state."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple) and len(record.args) > 2 and isinstance(record.args[2], str):
+            hidden = re.sub(r"\b(code|state)=[^&\s]*", r"\1=***", record.args[2])
+            record.args = (*record.args[:2], hidden, *record.args[3:])
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(HideOAuthParams())
 
 ROLES_SEED = [ROLE_ADMIN, ROLE_USER]  # Supervisor, Ingeniero de Planta
 

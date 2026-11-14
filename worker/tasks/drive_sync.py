@@ -113,9 +113,8 @@ async def _look_at(session, storage, access_token: str, item: dict) -> DriveFile
 
 async def _collect(session, storage, access_token: str) -> None:
     items = await gdrive.list_folder(access_token, gdrive.folder_id())
-    if items is None:
-        logger.info("The Drive folder does not exist (or is in the trash)")
-        return
+    if items is None:  # a wrong or deleted folder is not "nothing new": it must show as a failure, not as a healthy sync
+        raise RuntimeError("The Drive folder does not exist, is in the trash or is not shared with the connected account")
     known = {tuple(pair) for pair in (await session.execute(select(DriveFile.item_id, DriveFile.version))).all()}
     settled = datetime.now(timezone.utc) - SETTLE
     for item in sorted(items, key=lambda i: i["modified"]):
@@ -127,15 +126,17 @@ async def _collect(session, storage, access_token: str) -> None:
         await session.commit()  # one file at a time: a failure later does not lose what was already downloaded
 
     # Held files (a gap before them) are checked again: the days they were missing may have arrived.
-    base = await _base(session, storage)
-    pending = (await session.execute(select(DriveFile).where(DriveFile.status == FILE_PENDING))).scalars().all()
-    frontier = max([f.date_to for f in pending] + ([base[2]] if base else []), default=None)
     held = (await session.execute(
         select(DriveFile).where(DriveFile.status == FILE_HELD).order_by(DriveFile.date_from, DriveFile.id)
     )).scalars().all()
+    if not held:
+        return  # nothing to check: the base summary is not read from storage on a run without held files
+    base = await _base(session, storage)
+    pending = (await session.execute(select(DriveFile).where(DriveFile.status == FILE_PENDING))).scalars().all()
+    frontier = max([f.date_to for f in pending] + ([base[2]] if base else []), default=None)
     for file in held:
         if frontier is None:  # the first data ever: nothing to continue
-            file.status = FILE_PENDING
+            file.status, file.reason = FILE_PENDING, None
         elif file.date_to <= frontier:
             file.status, file.reason = FILE_REJECTED, f"The file adds no days after {frontier}, the last day of the data"
         else:
@@ -144,7 +145,7 @@ async def _collect(session, storage, access_token: str) -> None:
             except ValueError as error:
                 file.reason = str(error)[:500]  # stays held
                 continue
-            file.status = FILE_PENDING
+            file.status, file.reason = FILE_PENDING, None  # the gap that held it is gone
         frontier = max(frontier, file.date_to) if frontier else file.date_to
     await session.commit()
 
