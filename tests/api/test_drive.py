@@ -158,6 +158,18 @@ class TestConnect:
         assert refused.status_code == 400 and "Google" not in refused.text
         assert status(client, supervisor_headers)["connected"] is False
 
+    def test_the_access_log_does_not_print_the_authorization_code(self):
+        import logging
+
+        from main import HideOAuthParams
+
+        path = f"{DRIVE}/callback?state=abc123&iss=https://accounts.google.com&code=4/0AXYZsecret&scope=drive.readonly"
+        record = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, '%s - "%s %s HTTP/%s" %d', ("1.2.3.4:1", "GET", path, "1.1", 200), None)
+        HideOAuthParams().filter(record)
+        line = record.getMessage()
+        assert "4/0AXYZsecret" not in line and "abc123" not in line
+        assert "code=***" in line and "state=***" in line and "scope=drive.readonly" in line
+
     def test_a_demoted_supervisor_cannot_finish_the_connection(self, client, gdrive, supervisor_headers):
         url = client.get(f"{DRIVE}/connect", headers=supervisor_headers).json()["authorizationUrl"]
         state = parse_qs(urlparse(url).query)["state"][0]
@@ -227,9 +239,15 @@ class TestSyncErrors:
         sync(client)
         assert status(client, supervisor_headers)["error"] is None
 
-    def test_a_missing_folder_is_not_an_error(self, client, gdrive, supervisor_headers):
+    def test_a_missing_folder_fails_the_run_and_keeps_the_last_success(self, client, gdrive, supervisor_headers):
         connect(client, supervisor_headers)
+        sync(client)
+        done = status(client, supervisor_headers)["lastSyncAt"]
         gdrive.folder = False
+        sync(client)
+        failed = status(client, supervisor_headers)
+        assert (failed["error"], failed["lastSyncAt"]) == ("sync_failed", done)
+        gdrive.folder = True  # the folder is back: the next run clears the error
         sync(client)
         assert status(client, supervisor_headers)["error"] is None
 
@@ -346,6 +364,7 @@ class TestSyncDatasets:
         gdrive.files["middle.xlsx"] = after_base(1, 28)
         sync(client)
         assert {name: state for name, (state, _) in files(client).items()} == {"late.xlsx": "consumed", "middle.xlsx": "consumed"}
+        assert files(client)["late.xlsx"][1] is None  # the gap that held it is not shown once it is gone
         assert len(datasets(client, supervisor_headers)) == 2
 
     def test_while_a_training_runs_the_files_wait_for_the_next_run(self, client, gdrive, supervisor_headers):
