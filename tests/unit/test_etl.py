@@ -61,6 +61,13 @@ class TestReadSections:  # US002, US003
         with pytest.raises(SchemaError, match="non-numeric"):
             read_sections(workbook_bytes({"EL A": rows}))
 
+    def test_accepts_a_cell_with_no_values_in_the_whole_file(self):  # out of service the whole period: a gap, not text
+        rows = section_rows()
+        for row in rows[1:]:
+            row[3] = None
+        _, schema = read_sections(workbook_bytes({"EL A": rows}))["A"]
+        assert schema.cell_cols == ["1", "2", "3"]
+
     def test_rejects_a_file_that_is_not_a_workbook(self):
         with pytest.raises(SchemaError, match="not a valid Excel workbook"):
             read_sections(b"this is not an excel file")
