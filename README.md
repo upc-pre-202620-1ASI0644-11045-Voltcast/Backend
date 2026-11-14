@@ -1,31 +1,25 @@
 # VoltCast — Aplicación móvil con bibliotecas de Machine Learning para pronosticar variaciones de voltaje eléctrico en una industria química peruana
 
-Backend de VoltCast (FastAPI). Equipo: Oscar Gabriel Aranda Vallejos (Scrum Master) · Renzo Cesar Silva Morales (Project Manager).
+Bounded Contexts
 
-## Objetivo del sprint 2
-
-Desarrollar los módulos de **Gestión de Usuarios y Accesos** (`iam`) y **Gestión de Celdas y Componentes** (`cell_management`), correspondientes a las HU US009 – US023. Fecha límite: **24/10/2026**.
-
-## Bounded Contexts
-
-| Bounded context             | Módulo                             | Tablas                                                                                                  |
-| --------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `iam`                     | Gestión de Usuarios y Accesos      | `role`, `user`, `password_reset`                                                                  |
-| `cell_management`         | Gestión de Celdas y Componentes    | `cell`, `component`                                                                                 |
-| `dataset_management`      | Ingesta y Preprocesamiento de Datos | `uploaded_dataset`                                                                                    |
-| `voltage_forecasting`     | Machine Learning                    | `ml_model`, `training_execution`, `prediction`, `model_evaluation`, `model_evaluation_result` |
-| `notification_management` | Alertas y Notificaciones            | `alert_rule`, `notification`, `notification_type`                                                 |
+| Bounded context             | Módulo                             | Tablas                                                                                                  | User Stories        |
+| --------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------- |
+| `iam`                     | Gestión de Usuarios y Accesos      | `role`, `user`, `password_reset`                                                                  | US018–US023        |
+| `cell_management`         | Gestión de Celdas y Componentes    | `cell`, `component`                                                                                 | US009–US017        |
+| `dataset_management`      | Ingesta y Preprocesamiento de Datos | `uploaded_dataset`                                                                                    | US001–US004        |
+| `voltage_forecasting`     | Machine Learning                    | `ml_model`, `training_execution`, `prediction`, `model_evaluation`, `model_evaluation_result` | US005–US008, US031 |
+| `notification_management` | Alertas y Notificaciones            | `alert_rule`, `notification`, `notification_type`                                                 | US024–US030        |
 
 ## Product Backlog
 
 ### Dataset Management Bounded Context
 
-| ID    | Como                | Quiero                                                                                         | Para                                                                    |
-| ----- | ------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| US001 | Ingeniero de Planta | subir archivos Excel con registros de voltaje                                                  | tener un modelo entrenado con los patrones de la empresa                |
-| US002 | Ingeniero de Planta | contar con un sistema que identifique el tipo de columnas que tiene un archivo Excel           | determinar rápidamente las columnas con valores de voltaje y corriente eléctrica |
-| US003 | Ingeniero de Planta | contar con un sistema que identifique las celdas eléctricas de un archivo Excel                | tener un modelo adaptado a las condiciones actuales de la planta        |
-| US004 | Ingeniero de Planta | contar con un sistema que ordene los registros de un archivo Excel                             | evitar valores duplicados y datos no relacionados con el voltaje        |
+| ID    | Como                | Quiero                                                                               | Para                                                                               |
+| ----- | ------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| US001 | Ingeniero de Planta | subir archivos Excel con registros de voltaje                                        | tener un modelo entrenado con los patrones de la empresa                           |
+| US002 | Ingeniero de Planta | contar con un sistema que identifique el tipo de columnas que tiene un archivo Excel | determinar rápidamente las columnas con valores de voltaje y corriente eléctrica |
+| US003 | Ingeniero de Planta | contar con un sistema que identifique las celdas eléctricas de un archivo Excel     | tener un modelo adaptado a las condiciones actuales de la planta                   |
+| US004 | Ingeniero de Planta | contar con un sistema que ordene los registros de un archivo Excel                   | evitar valores duplicados y datos no relacionados con el voltaje                   |
 
 #### Criterios de aceptación
 
@@ -81,40 +75,15 @@ Desarrollar los módulos de **Gestión de Usuarios y Accesos** (`iam`) y **Gesti
   - **Entonces** el sistema conserva únicamente un registro por cada valor duplicado
   - **Y** descarta los datos no relacionados con el voltaje.
 
-### Cell Management Bounded Context
-
-| ID    | Como                | Quiero                                                                             | Para                                                                      |
-| ----- | ------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| US009 | Ingeniero de Planta | registrar las celdas eléctricas de la empresa                                     | tener un registro sólido en el sistema                                   |
-| US010 | Ingeniero de Planta | editar los datos de una celda eléctrica                                           | mantener la información de las celdas eléctricas actualizada            |
-| US011 | Ingeniero de Planta | deshabilitar una celda eléctrica que esté fuera de uso, conservando su historial | mantener en el sistema solamente las celdas con las que cuenta la empresa |
-| US012 | Ingeniero de Planta | registrar y asignar los cátodos y ánodos de cada celda                           | mantener un inventario actualizado de los componentes instalados          |
-| US013 | Ingeniero de Planta | deshabilitar un cátodo o ánodo que esté fuera de uso, conservando su historial  | tener un registro permanente y trazable de estos componentes              |
-| US014 | Ingeniero de Planta | intercambiar los cátodos y ánodos asignados entre celdas                         | regular la carga de voltaje                                               |
-| US015 | Ingeniero de Planta | editar los datos de un cátodo o ánodo                                            | mantener su información actualizada a lo largo del tiempo                |
-| US016 | Ingeniero de Planta | generar un código de barras por celda                                             | identificar cada celda de forma única                                    |
-| US017 | Ingeniero de Planta | descargar el código de barras de una celda                                        | imprimirlo y usarlo para identificar la celda en planta                   |
-
-### IAM Bounded Context
-
-| ID    | Como                        | Quiero                                                                                         | Para                                                                                           |
-| ----- | --------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| US018 | Supervisor                  | visualizar las solicitudes de registro pendientes desde un panel                               | revisarlas de manera rápida                                                                   |
-| US019 | Supervisor                  | aprobar o rechazar las solicitudes de registro pendientes                                      | controlar qué personal obtiene acceso al sistema                                              |
-| US020 | Supervisor                  | editar o deshabilitar cuentas de ingenieros integradas al sistema                              | asegurar que solo el personal operativo autorizado mantenga acceso al sistema                  |
-| US021 | Supervisor e Ing. de Planta | acceder al sistema con credenciales seguras (login)                                            | proteger la privacidad de los datos energéticos de la empresa                                 |
-| US022 | Supervisor e Ing. de Planta | recuperar mi contraseña mediante un código de verificación enviado a mi correo electrónico | recuperar el acceso a mi cuenta de forma segura en caso de olvido                              |
-| US023 | Ingeniero de Planta         | completar un formulario de registro (sign up) que genere una solicitud de creación de cuenta  | poder solicitar el acceso al sistema bajo el permiso de un supervisor con credenciales propias |
-
 ### Voltage Forecasting Bounded Context
 
-| ID    | Como       | Quiero                                                        | Para                                         |
-| ----- | ---------- | ------------------------------------------------------------- | -------------------------------------------- |
-| US005 | Ingeniero de Planta | contar con un modelo predictivo entrenado | generar proyecciones de voltaje |
-| US006 | Ingeniero de Planta | poder evaluar la precisión del modelo | conocer la efectividad del sistema |
-| US007 | Ingeniero de Planta | visualizar pronósticos de voltaje generados | identificar celdas que superen el voltaje permitido |
-| US008 | Ingeniero de Planta | filtrar pronósticos de voltajes por fecha | visualizar pronósticos de una fecha específica |
-| US031 | Supervisor | que el sistema detecte automáticamente registros nuevos de voltaje en la nube | que se mantenga con datos actualizados |
+| ID    | Como                | Quiero                                                                         | Para                                                |
+| ----- | ------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------- |
+| US005 | Ingeniero de Planta | contar con un modelo predictivo entrenado                                      | generar proyecciones de voltaje                     |
+| US006 | Ingeniero de Planta | poder evaluar la precisión del modelo                                         | conocer la efectividad del sistema                  |
+| US007 | Ingeniero de Planta | visualizar pronósticos de voltaje generados                                   | identificar celdas que superen el voltaje permitido |
+| US008 | Ingeniero de Planta | filtrar pronósticos de voltajes por fecha                                     | visualizar pronósticos de una fecha específica    |
+| US031 | Supervisor          | que el sistema detecte automáticamente registros nuevos de voltaje en la nube | que se mantenga con datos actualizados              |
 
 #### Criterios de aceptación
 
@@ -185,7 +154,7 @@ Desarrollar los módulos de **Gestión de Usuarios y Accesos** (`iam`) y **Gesti
   - **Dado que** Drive está conectado y se suben a la carpeta archivos Excel con voltajes nuevos
   - **Cuando** se ejecuta la sincronización diaria
   - **Entonces** el sistema detecta los archivos sin intervención del Supervisor
-  - **Y**, al acumular más de 30 días nuevos, crea un dataset que complementa al último y lo deja listo
+  - **Y**, al acumular 30 días nuevos o más, crea un dataset que complementa al último y lo deja listo
   - **Y** el sistema inicia un entrenamiento de forma automática.
 - **E03: Acceso no permitido a la conexión**
   - **Dado que** un usuario sin rol de Supervisor intenta conectar Drive
@@ -210,17 +179,42 @@ Desarrollar los módulos de **Gestión de Usuarios y Accesos** (`iam`) y **Gesti
   - **Y**, al corregir la causa, el error se limpia
   - **Y** ningún registro ni respuesta expone tokens, secretos ni el código de autorización.
 
+### Cell Management Bounded Context
+
+| ID    | Como                | Quiero                                                                             | Para                                                                      |
+| ----- | ------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| US009 | Ingeniero de Planta | registrar las celdas eléctricas de la empresa                                     | tener un registro sólido en el sistema                                   |
+| US010 | Ingeniero de Planta | editar los datos de una celda eléctrica                                           | mantener la información de las celdas eléctricas actualizada            |
+| US011 | Ingeniero de Planta | deshabilitar una celda eléctrica que esté fuera de uso, conservando su historial | mantener en el sistema solamente las celdas con las que cuenta la empresa |
+| US012 | Ingeniero de Planta | registrar y asignar los cátodos y ánodos de cada celda                           | mantener un inventario actualizado de los componentes instalados          |
+| US013 | Ingeniero de Planta | deshabilitar un cátodo o ánodo que esté fuera de uso, conservando su historial  | tener un registro permanente y trazable de estos componentes              |
+| US014 | Ingeniero de Planta | intercambiar los cátodos y ánodos asignados entre celdas                         | regular la carga de voltaje                                               |
+| US015 | Ingeniero de Planta | editar los datos de un cátodo o ánodo                                            | mantener su información actualizada a lo largo del tiempo                |
+| US016 | Ingeniero de Planta | generar un código de barras por celda                                             | identificar cada celda de forma única                                    |
+| US017 | Ingeniero de Planta | descargar el código de barras de una celda                                        | imprimirlo y usarlo para identificar la celda en planta                   |
+
+### IAM Bounded Context
+
+| ID    | Como                        | Quiero                                                                                         | Para                                                                                           |
+| ----- | --------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| US018 | Supervisor                  | visualizar las solicitudes de registro pendientes desde un panel                               | revisarlas de manera rápida                                                                   |
+| US019 | Supervisor                  | aprobar o rechazar las solicitudes de registro pendientes                                      | controlar qué personal obtiene acceso al sistema                                              |
+| US020 | Supervisor                  | editar o deshabilitar cuentas de ingenieros integradas al sistema                              | asegurar que solo el personal operativo autorizado mantenga acceso al sistema                  |
+| US021 | Supervisor e Ing. de Planta | acceder al sistema con credenciales seguras (login)                                            | proteger la privacidad de los datos energéticos de la empresa                                 |
+| US022 | Supervisor e Ing. de Planta | recuperar mi contraseña mediante un código de verificación enviado a mi correo electrónico | recuperar el acceso a mi cuenta de forma segura en caso de olvido                              |
+| US023 | Ingeniero de Planta         | completar un formulario de registro (sign up) que genere una solicitud de creación de cuenta  | poder solicitar el acceso al sistema bajo el permiso de un supervisor con credenciales propias |
+
 ### Notification Management Bounded Context
 
-| ID    | Como                                | Quiero                                                                                                          | Para                                                                        |
-| ----- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| US024 | Supervisor e Ingeniero de Planta    | recibir una notificación por correo cuando mi contraseña haya sido cambiada                                     | detectar de inmediato un posible acceso no autorizado a mi cuenta          |
-| US025 | Supervisor                          | recibir una notificación cuando un visitante solicite acceso al sistema                                         | enterarme rápidamente de nuevas peticiones de acceso                        |
-| US026 | Ingeniero de Planta                 | recibir notificaciones cuando algún pronóstico supere el umbral de voltaje permitido en cada celda para una fecha determinada | anotar las celdas que podrían experimentar excesos de voltaje para una fecha determinada |
-| US027 | Supervisor                          | configurar el umbral máximo de voltaje                                                                          | ajustar las notificaciones de alerta según las condiciones específicas de la industria |
-| US028 | Ingeniero de Planta                 | recibir notificaciones cuando esté cercana la fecha en la que se pronosticó un valor excesivo de voltaje        | recordar las celdas que deben ser revisadas                                 |
-| US029 | Ingeniero de Planta                 | recibir una notificación cuando mi cuenta haya sido aceptada en el sistema                                      | saber si ya puedo utilizar el sistema                                       |
-| US030 | Ingeniero de Planta                 | recibir una notificación cuando mi cuenta haya sido rechazada en el sistema                                     | saber si tengo permiso de utilizar el sistema                               |
+| ID    | Como                             | Quiero                                                                                                                          | Para                                                                                      |
+| ----- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| US024 | Supervisor e Ingeniero de Planta | recibir una notificación por correo cuando mi contraseña haya sido cambiada                                                   | detectar de inmediato un posible acceso no autorizado a mi cuenta                         |
+| US025 | Supervisor                       | recibir una notificación cuando un visitante solicite acceso al sistema                                                        | enterarme rápidamente de nuevas peticiones de acceso                                     |
+| US026 | Ingeniero de Planta              | recibir notificaciones cuando algún pronóstico supere el umbral de voltaje permitido en cada celda para una fecha determinada | anotar las celdas que podrían experimentar excesos de voltaje para una fecha determinada |
+| US027 | Supervisor                       | configurar el umbral máximo de voltaje                                                                                         | ajustar las notificaciones de alerta según las condiciones específicas de la industria  |
+| US028 | Ingeniero de Planta              | recibir notificaciones cuando esté cercana la fecha en la que se pronosticó un valor excesivo de voltaje                      | recordar las celdas que deben ser revisadas                                               |
+| US029 | Ingeniero de Planta              | recibir una notificación cuando mi cuenta haya sido aceptada en el sistema                                                     | saber si ya puedo utilizar el sistema                                                     |
+| US030 | Ingeniero de Planta              | recibir una notificación cuando mi cuenta haya sido rechazada en el sistema                                                    | saber si tengo permiso de utilizar el sistema                                             |
 
 #### Criterios de aceptación
 
@@ -308,10 +302,6 @@ Desarrollar los módulos de **Gestión de Usuarios y Accesos** (`iam`) y **Gesti
 
 - Python 3.13
 - FastAPI
-- MySQL 8.0 (Azure Database for MySQL)
-- Azure Cache for Redis (sesiones y tokens JWT)
-- Autenticación: JWT + bcrypt
-- SMTP (código de recuperación de contraseña)
 
 ## Roles
 
