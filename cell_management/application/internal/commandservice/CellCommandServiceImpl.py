@@ -34,6 +34,7 @@ class CellCommandServiceImpl:
         if name != cell.name and await self._repository.exists_by_name(name):
             raise ValueError(f"Cell '{name}' already exists")
         cell.update_info(name=name)
+        cell.refresh_barcode(await self._component_repo.find_all_components(cell_id=cell.id, is_active=True))
         return await self._repository.save(cell)
 
     async def release_components(self, command: ReleaseCellComponentsCommand) -> Cell:
@@ -41,6 +42,7 @@ class CellCommandServiceImpl:
         cell = await self._get_or_raise(command.cell_id)
         await self._component_repo.release_components_of_cell(cell.id)
         cell.refresh_status(set())
+        cell.refresh_barcode([])
         # Same session: this commit persists the released components and the cell status atomically.
         return await self._repository.save(cell)
 
@@ -58,7 +60,7 @@ class CellCommandServiceImpl:
         assigned_types = {component.type for component in components}
         if assigned_types != {int(ComponentType.CATHODE), int(ComponentType.ANODE)}:
             raise ValueError("Cell must have an assigned cathode and anode to generate its barcode")
-        cell.generate_barcode()
+        cell.generate_barcode(components)
         return await self._repository.save(cell)
 
     async def _get_or_raise(self, cell_id: int) -> Cell:

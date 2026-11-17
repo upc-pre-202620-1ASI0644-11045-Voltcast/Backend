@@ -35,17 +35,23 @@ class TestCell:
         cell.show()
         assert cell.is_visible
 
-    def test_barcode_is_derived_from_the_id_and_kept_once_generated(self):
+    def test_barcode_holds_the_cell_name_and_its_cathode_and_anode(self):
         cell = Cell(id=7, name="A1", is_active=True)
-        cell.generate_barcode()
-        assert cell.barcode_value == "CELL-00007"
-        cell.barcode_value = "CELL-CUSTOM"
-        cell.generate_barcode()
-        assert cell.barcode_value == "CELL-CUSTOM"
+        parts = [Component(id=1, type=0, serial_code="CAT-1"), Component(id=12, type=1, serial_code="ANO-9")]
+        cell.generate_barcode(parts)
+        assert cell.barcode_value == "A1|CAT-1|ANO-9"
+
+    def test_refresh_barcode_follows_the_components_and_clears_when_inactive(self):
+        cell = Cell(id=7, name="A1", is_active=True, barcode_value="old")
+        cell.refresh_barcode([Component(id=2, type=0, serial_code="C"), Component(id=3, type=1, serial_code="A")])
+        assert cell.barcode_value == "A1|C|A"
+        cell.is_active = False
+        cell.refresh_barcode([])
+        assert cell.barcode_value is None
 
     def test_no_barcode_for_an_inactive_cell(self):
         with pytest.raises(ValueError):
-            Cell(id=1, name="A1", is_active=False).generate_barcode()
+            Cell(id=1, name="A1", is_active=False).generate_barcode([])
 
 
 class TestComponent:
