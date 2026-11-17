@@ -188,7 +188,9 @@ class TestBarcode:  # US016
         equip(client, engineer_headers, cell["id"])
         response = client.post(f"{CELLS}/{cell['id']}/barcode", headers=engineer_headers)
         assert response.status_code == 200
-        assert response.json()["barcode_value"] == f"CELL-{cell['id']:05d}"
+        components = client.get(COMPONENTS, headers=engineer_headers, params={"cell_id": cell["id"]}).json()
+        codes = {c["type"]: c["serial_code"] for c in components}
+        assert response.json()["barcode_value"] == f"{cell['name']}|{codes['CATHODE']}|{codes['ANODE']}"
         assert client.get(f"{CELLS}/{cell['id']}", headers=engineer_headers).json()["barcode_value"] is not None
 
     def test_generating_again_returns_the_same_barcode(self, client, engineer_headers):

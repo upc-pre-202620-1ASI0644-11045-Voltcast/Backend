@@ -3,7 +3,7 @@ import re
 from sqlalchemy import String, Boolean, text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from cell_management.domain.model.aggregates.Component import ComponentType
+from cell_management.domain.model.aggregates.Component import Component, ComponentType
 from shared.infrastructure.persistence.configuration.column_types import SmallInt
 from shared.infrastructure.persistence.configuration.database_configuration import Base
 
@@ -44,12 +44,23 @@ class Cell(Base):
     def show(self) -> None:
         self.is_visible = True
 
-    def generate_barcode(self) -> None:
-        """Assigns the barcode value derived from the cell id; keeps the existing one if already generated."""
+    def generate_barcode(self, components: list[Component]) -> None:
+        """Barcode = cell name + its cathode and anode serial codes (A1|CAT-000023|ANO-000024)."""
         if not self.is_active:
             raise ValueError("Cannot generate a barcode for an inactive cell")
+        by_type = {component.type: component for component in components}
+        self.barcode_value = "|".join(
+            [self.name, by_type[int(ComponentType.CATHODE)].serial_code, by_type[int(ComponentType.ANODE)].serial_code]
+        )
+
+    def refresh_barcode(self, components: list[Component]) -> None:
+        """Keeps an already generated barcode in line with the cell's current name and components."""
         if self.barcode_value is None:
-            self.barcode_value = f"CELL-{self.id:05d}"
+            return
+        if self.is_active:
+            self.generate_barcode(components)
+        else:
+            self.barcode_value = None
 
     def update_info(self, name: str) -> None:
         self.name = name

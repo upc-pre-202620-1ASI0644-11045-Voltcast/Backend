@@ -6,7 +6,7 @@ ComponentTypeName = Literal["CATHODE", "ANODE"]
 
 class ComponentRequest(BaseModel):
     type: ComponentTypeName
-    serial_code: str = Field(..., min_length=1, max_length=50)
+    serial_code: str = Field(..., min_length=1, max_length=10)
     cell_id: int | None = None
 
     model_config = {
@@ -18,7 +18,7 @@ class ComponentRequest(BaseModel):
 
 class ComponentUpdateRequest(BaseModel):
     type: ComponentTypeName | None = None
-    serial_code: str | None = Field(None, min_length=1, max_length=50)
+    serial_code: str | None = Field(None, min_length=1, max_length=10)
 
 
 class ComponentAssignRequest(BaseModel):

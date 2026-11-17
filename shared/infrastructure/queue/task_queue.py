@@ -54,10 +54,11 @@ class AzureTaskQueue:
     """
     The same queues in Azure Storage Queues, which have to exist already. A received message turns invisible for
     VISIBILITY_SECONDS: if the worker dies, it shows up again after that and is retried. It has to outlast the
-    longest Job (2 hours), or the message would come back before it is deleted and the deletion would fail.
+    longest Job (the training one, replica timeout of 1 hour), or the message would come back before it is deleted and
+    the deletion would fail: raise both together.
     """
 
-    VISIBILITY_SECONDS = 3 * 3600
+    VISIBILITY_SECONDS = 2 * 3600
 
     def __init__(self, connection_string: str):
         self._connection_string = connection_string

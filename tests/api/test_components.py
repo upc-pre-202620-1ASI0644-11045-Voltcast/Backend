@@ -21,6 +21,11 @@ class TestRegisterComponent:  # US012
         assert response.status_code == 422
         assert {error["loc"][-1] for error in response.json()["detail"]} == {"type", "serial_code"}
 
+    def test_serial_code_allows_at_most_10_characters(self, client, engineer_headers):
+        ok = client.post(COMPONENTS, headers=engineer_headers, json={"type": "ANODE", "serial_code": "ANO-000024"})
+        too_long = client.post(COMPONENTS, headers=engineer_headers, json={"type": "ANODE", "serial_code": "ANO-0000245"})
+        assert (ok.status_code, too_long.status_code) == (201, 422)
+
     def test_rejects_an_unknown_type(self, client, engineer_headers):
         response = client.post(COMPONENTS, headers=engineer_headers, json={"type": "BATTERY", "serial_code": "X-1"})
         assert response.status_code == 422

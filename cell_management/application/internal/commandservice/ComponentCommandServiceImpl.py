@@ -109,6 +109,7 @@ class ComponentCommandServiceImpl:
             if cell:
                 assigned = await self._component_repo.find_all_components(cell_id=cell_id, is_active=True)
                 cell.refresh_status({component.type for component in assigned})
+                cell.refresh_barcode(assigned)
                 await self._cell_repo.save(cell)
 
     async def _get_visible_cell_or_raise(self, cell_id: int):
