@@ -168,16 +168,6 @@ Bounded Contexts
   - **Entonces** el sistema rechaza el archivo que no aporta días nuevos, indicando el motivo
   - **Y** retiene el archivo con un hueco de más de 12 días hasta que lleguen los días intermedios
   - **Y** ignora, sin error, las hojas de Google y los archivos que no son Excel.
-- **E05: Sincronización diferida**
-  - **Dado que** un archivo se modificó hace menos de 60 segundos, o hay un entrenamiento en curso
-  - **Cuando** se ejecuta la sincronización diaria
-  - **Entonces** el sistema espera a la siguiente ejecución sin fallar ni perder archivos.
-- **E06: Fallo de acceso a Google**
-  - **Dado que** se revocó el acceso de VoltCast o la carpeta configurada no es válida
-  - **Cuando** se ejecuta la sincronización diaria
-  - **Entonces** el sistema registra el error en el estado de la integración, sin reintentar ni borrar datos
-  - **Y**, al corregir la causa, el error se limpia
-  - **Y** ningún registro ni respuesta expone tokens, secretos ni el código de autorización.
 
 ### Cell Management Bounded Context
 
