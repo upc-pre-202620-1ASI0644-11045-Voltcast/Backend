@@ -23,13 +23,13 @@ def register(client, number):
     )
 
 
-def test_login_allows_10_attempts_per_minute_then_answers_429(client, fake_redis):
-    statuses = [bad_login(client).status_code for _ in range(12)]
-    assert statuses == [401] * 10 + [429] * 2
+def test_login_allows_25_attempts_per_minute_then_answers_429(client, fake_redis):
+    statuses = [bad_login(client).status_code for _ in range(27)]
+    assert statuses == [401] * 25 + [429] * 2
 
 
 def test_blocked_requests_tell_when_to_retry(client, fake_redis):
-    for _ in range(10):
+    for _ in range(25):
         bad_login(client)
     response = bad_login(client)
     assert response.status_code == 429
@@ -37,24 +37,24 @@ def test_blocked_requests_tell_when_to_retry(client, fake_redis):
     assert "Too many requests" in response.json()["detail"]
 
 
-def test_register_allows_5_requests_per_hour(client, fake_redis):
-    statuses = [register(client, number).status_code for number in range(7)]
-    assert statuses == [201] * 5 + [429] * 2
+def test_register_allows_100_requests_per_hour(client, fake_redis):
+    statuses = [register(client, number).status_code for number in range(102)]
+    assert statuses == [201] * 100 + [429] * 2
 
 
 def test_every_endpoint_has_its_own_counter(client, fake_redis):
-    for _ in range(11):
+    for _ in range(26):
         bad_login(client)
     assert bad_login(client).status_code == 429
     assert register(client, 1).status_code == 201
 
 
-def test_password_reset_request_is_limited_to_5_per_hour(client, fake_redis, sent_codes):
+def test_password_reset_request_is_limited_to_25_per_hour(client, fake_redis, sent_codes):
     statuses = [
         client.post(f"{API}/auth/password-reset/request", json={"email": "a@voltcast.com"}).status_code
-        for _ in range(6)
+        for _ in range(26)
     ]
-    assert statuses == [200] * 5 + [429]
+    assert statuses == [200] * 25 + [429]
 
 
 def test_the_limiter_never_blocks_the_api_when_redis_is_down(client, monkeypatch):
