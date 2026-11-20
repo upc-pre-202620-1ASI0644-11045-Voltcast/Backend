@@ -25,9 +25,11 @@ from iam.interface.api.rest.resources.PasswordResetResource import (
 )
 from notification_management.interface.notifier import notifier_for
 from shared.infrastructure.persistence.configuration.database_configuration import get_db_session
-from shared.infrastructure.security.rate_limiter import rate_limit
+from shared.infrastructure.security.rate_limiter import FailureLimiter, rate_limit
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
+
+login_failures = FailureLimiter("login-failures", max_failures=5, window_seconds=300)
 
 
 # =============================================================================
@@ -38,17 +40,21 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
     "/login",
     response_model=AuthenticationResponse,
     summary="Log in",
-    dependencies=[Depends(rate_limit("login", max_requests=10, window_seconds=60))],
+    dependencies=[Depends(rate_limit("login", max_requests=25, window_seconds=60))],
 )
 async def login(
     request: SignInRequest,
     db: AsyncSession = Depends(get_db_session),
 ):
+    # Outside the try so its 429 is not turned into a 500. Counts the submitted email, existing account or not
+    await login_failures.check(request.email)
     try:
         service = CommandServiceImpl(UserRepositoryImpl(db), notifier_for(db))
         auth_response = await service.sign_in(AuthResourceAssembler.to_sign_in_command(request))
+        await login_failures.clear(request.email)
         return AuthResourceAssembler.to_authentication_response(auth_response)
     except ValueError as e:
+        await login_failures.record(request.email)
         raise HTTPException(status_code=401, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
