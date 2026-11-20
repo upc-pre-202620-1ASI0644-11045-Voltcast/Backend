@@ -7,9 +7,9 @@ from shared.infrastructure.persistence.configuration.column_types import SmallIn
 from shared.infrastructure.persistence.configuration.database_configuration import Base
 
 
-# Range of the limit the Supervisor can set (V), as the plant defines it: from 2.85 to 3.10, both included.
+# Range of the limit the Supervisor can set (V), as the plant defines it: from 2.85 to 3.20, both included.
 MIN_MAX_VOLTAGE = 2.85
-MAX_MAX_VOLTAGE = 3.10
+MAX_MAX_VOLTAGE = 3.20
 
 
 class AlertRule(Base):

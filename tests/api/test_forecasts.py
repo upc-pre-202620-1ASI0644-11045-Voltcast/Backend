@@ -204,9 +204,9 @@ class TestAlertRules:  # US007-E02
     def test_rejects_an_unknown_cell(self, client, supervisor_headers):
         assert client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": 3.0, "cell_id": 99}).status_code == 400
 
-    def test_the_limit_must_be_between_2_85_and_3_10_both_included(self, client, supervisor_headers):
+    def test_the_limit_must_be_between_2_85_and_3_20_both_included(self, client, supervisor_headers):
         def status(volts):
             return client.post(ALERT_RULES, headers=supervisor_headers, json={"max_voltage": volts}).status_code
 
-        assert [status(v) for v in (0, 2.849, 3.101, 4)] == [422] * 4
-        assert [status(v) for v in (2.85, 3.1)] == [201] * 2
+        assert [status(v) for v in (0, 2.849, 3.201, 4)] == [422] * 4
+        assert [status(v) for v in (2.85, 3.2)] == [201] * 2

@@ -98,7 +98,7 @@ class TestVoltageExceeded:  # US026
         assert [call[2] for call in fake_push.calls] == ["Se han recibido nuevos pronósticos, revisa tu correo electrónico."]
 
     def test_no_notification_when_nothing_exceeds_the_limit(self, client, engineer_headers, supervisor_headers):
-        force_limit(client, 9.0)  # above any real voltage: the API range is below the synthetic forecasts
+        force_limit(client, 9.0)  # above any real voltage and outside the API range
         train(client, engineer_headers)
         assert alerts(client, VOLTAGE_EXCEEDED) == alerts(client, VOLTAGE_EXCEEDED, NotificationChannel.EMAIL) == []
 
