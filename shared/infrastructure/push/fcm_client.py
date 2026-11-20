@@ -43,10 +43,12 @@ async def _access_token(session: aiohttp.ClientSession, credentials: dict) -> st
     return _access["token"]
 
 
-async def send_push(tokens: list[str], title: str, body: str, data: dict[str, str]) -> list[str]:
+async def send_push(tokens: list[str], title: str, body: str, channel_id: str | None = None) -> list[str]:
     """
     Sends the notification to every device token. Returns the tokens FCM no longer knows (uninstalled app or expired
     token), so the caller can forget them. Any other error is raised: the notification stays pending and is retried.
+    `channel_id` puts it in an Android channel the app created, with high priority; a device without that channel
+    falls back to the default one.
     """
     credentials = _credentials()
     invalid: list[str] = []
@@ -54,7 +56,9 @@ async def send_push(tokens: list[str], title: str, body: str, data: dict[str, st
         headers = {"Authorization": f"Bearer {await _access_token(session, credentials)}"}
         url = FCM_URL.format(project=credentials["project_id"])
         for token in tokens:
-            message = {"message": {"token": token, "notification": {"title": title, "body": body}, "data": data}}
+            message = {"message": {"token": token, "notification": {"title": title, "body": body}}}
+            if channel_id:
+                message["message"]["android"] = {"priority": "HIGH", "notification": {"channel_id": channel_id}}
             async with session.post(url, json=message, headers=headers) as response:
                 if response.status == 404 or (response.status == 400 and "registration token" in (await response.text()).lower()):
                     invalid.append(token)

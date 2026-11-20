@@ -30,12 +30,12 @@ class TrainingResponse(BaseModel):
 
 class AlertRuleRequest(BaseModel):
     max_voltage: float = Field(
-        ..., gt=MIN_MAX_VOLTAGE, le=MAX_MAX_VOLTAGE,
-        description=f"Maximum allowed voltage (V): above {MIN_MAX_VOLTAGE} and up to {MAX_MAX_VOLTAGE}",
+        ..., ge=MIN_MAX_VOLTAGE, le=MAX_MAX_VOLTAGE,
+        description=f"Maximum allowed voltage (V): from {MIN_MAX_VOLTAGE} to {MAX_MAX_VOLTAGE}, both included",
     )
     cell_id: int | None = Field(None, description="Leave empty to set the general limit for every cell")
 
-    model_config = {"json_schema_extra": {"examples": [{"max_voltage": 3.4, "cell_id": None}]}}
+    model_config = {"json_schema_extra": {"examples": [{"max_voltage": 3.0, "cell_id": None}]}}
 
 
 class AlertRuleResponse(BaseModel):

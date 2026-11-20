@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 
 from sqlalchemy import Enum as SAEnum, ForeignKey, Index, Integer, String, TIMESTAMP, UniqueConstraint, text
@@ -14,7 +14,8 @@ ACCESS_REQUESTED = "R"    # US025
 ACCOUNT_ACCEPTED = "A"    # US029
 ACCOUNT_REJECTED = "X"    # US030
 VOLTAGE_EXCEEDED = "V"    # US026
-DATE_NEAR = "D"           # US028
+DATE_NEAR = "D"           # US028, one day before the forecast date
+DATE_NEAR_2_DAYS = "E"    # US028, two days before the forecast date
 
 # Seeded at startup. The message (max 60 chars) is the subject / title of the notification.
 NOTIFICATION_TYPES = {
@@ -24,6 +25,7 @@ NOTIFICATION_TYPES = {
     ACCOUNT_REJECTED: "Tu cuenta fue rechazada",
     VOLTAGE_EXCEEDED: "Voltaje excesivo pronosticado",
     DATE_NEAR: "Revisa la celda: voltaje excesivo próximo",
+    DATE_NEAR_2_DAYS: "Revisa la celda: voltaje excesivo en 2 días",
 }
 
 
@@ -53,10 +55,31 @@ CHANNELS = {
 
 _BODIES = {ACCESS_REQUESTED: "Hay una nueva solicitud de acceso pendiente de revisión"}
 
+# The voltage alerts: queued by cell, delivered grouped by email and push (see NotificationServiceImpl).
+ALERT_TYPES = (VOLTAGE_EXCEEDED, DATE_NEAR_2_DAYS, DATE_NEAR)
+# Android channel of their push (the app creates it with high importance; the id must match exactly).
+VOLTAGE_ALERTS_CHANNEL = "voltage_alerts"
+MAX_CELLS_IN_PUSH = 3
+
+
+def alert_push_text(type_code: str, day: date | None, cells: list[str], limit: float | None) -> str:
+    """Push of a voltage alert group: the new forecasts (V) or the cells that exceed the limit on `day` (E, D)."""
+    if type_code == VOLTAGE_EXCEEDED or day is None:
+        return "Se han recibido nuevos pronósticos, revisa tu correo electrónico."
+    names = sorted(cells)
+    threshold = f"el umbral de {limit:.2f} V" if limit is not None else "el umbral"
+    if len(names) == 1:
+        return f"Para el {day:%d/%m/%Y} la celda {names[0]} superará {threshold}"
+    shown = ", ".join(names[:MAX_CELLS_IN_PUSH])
+    if len(names) <= MAX_CELLS_IN_PUSH:
+        return f"Para el {day:%d/%m/%Y} las celdas {shown} superarán {threshold}"
+    return (f"Para el {day:%d/%m/%Y} las celdas {shown} y {len(names) - MAX_CELLS_IN_PUSH} más superarán {threshold}. "
+            "Revisa tu correo electrónico para ver el detalle")
+
 
 def describe(type_code: str, cell_name: str | None, prediction_date: datetime | None, voltage: float | None) -> str:
     """Text of a notification, for the push and for the inbox (the title is the message of its type)."""
-    if type_code in (VOLTAGE_EXCEEDED, DATE_NEAR) and cell_name and prediction_date is not None and voltage is not None:
+    if type_code in (VOLTAGE_EXCEEDED, DATE_NEAR, DATE_NEAR_2_DAYS) and cell_name and prediction_date is not None and voltage is not None:
         return f"{cell_name}: {voltage:.3f} V pronosticados para el {prediction_date:%d/%m/%Y}"
     return _BODIES.get(type_code, "")
 

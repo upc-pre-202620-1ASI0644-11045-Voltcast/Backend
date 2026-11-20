@@ -40,7 +40,7 @@ def db(client, fn):
 
 
 def force_limit(client, volts: float) -> None:
-    """Sets the general limit straight in the database: the API only accepts 3.35-3.45 V, above the synthetic forecasts."""
+    """Sets the general limit straight in the database: the API only accepts 2.85-3.10 V, which the synthetic forecasts (~3.2) always exceed."""
     async def put(session):
         await session.execute(update(AlertRule).where(AlertRule.cell_id.is_(None)).values(is_active=False))
         session.add(AlertRule(max_voltage=volts))

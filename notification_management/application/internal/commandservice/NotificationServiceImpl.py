@@ -1,4 +1,5 @@
 import logging
+from datetime import date
 
 from cell_management.domain.model.aggregates.Cell import Cell
 from iam.domain.model.aggregates.Role import ROLE_ADMIN
@@ -9,11 +10,17 @@ from notification_management.domain.model.aggregates.Notification import (
     ACCESS_REQUESTED,
     ACCOUNT_ACCEPTED,
     ACCOUNT_REJECTED,
+    ALERT_TYPES,
     CHANNELS,
+    DATE_NEAR,
+    DATE_NEAR_2_DAYS,
     PASSWORD_CHANGED,
+    VOLTAGE_ALERTS_CHANNEL,
+    VOLTAGE_EXCEEDED,
     Notification,
     NotificationChannel,
     NotificationStatus,
+    alert_push_text,
     describe,
 )
 from notification_management.domain.repositories.NotificationRepository import NotificationRepository
@@ -21,8 +28,10 @@ from shared.domain.exceptions.domain_exceptions import EntityNotFoundException
 from shared.infrastructure.email.email_client import (
     send_account_accepted_notification,
     send_account_rejected_notification,
+    send_near_date_notification,
     send_new_registration_request_notification,
     send_password_changed_notification,
+    send_voltage_forecast_notification,
 )
 from shared.infrastructure.push.fcm_client import send_push
 from voltage_forecasting.domain.model.aggregates.Prediction import Prediction
@@ -64,12 +73,18 @@ class NotificationServiceImpl:
         shortcut: no row lock, two dispatches at the same time can deliver the same notification twice; lock the rows if it matters.
         """
         if NotificationChannel.EMAIL in channels:
+            alerts: dict[tuple[int, str], list] = {}
             for notification, prediction, cell in await self._repository.find_pending(NotificationChannel.EMAIL):
+                type_code = notification.notification_type.type
+                if type_code in ALERT_TYPES:
+                    alerts.setdefault((notification.user_id, type_code), []).append((notification, prediction, cell))
+                    continue
                 try:
                     await self._send_email(notification, await self._users.find_by_id(notification.user_id))
                     await self._mark_sent([notification])
                 except Exception:
                     logger.exception("Notification %s (email) could not be sent; it stays pending", notification.id)
+            await self._dispatch_alert_emails(alerts)
         if NotificationChannel.PUSH in channels:
             await self._dispatch_push()
 
@@ -78,23 +93,54 @@ class NotificationServiceImpl:
             notification.status = NotificationStatus.SENT
             await self._repository.save(notification)
 
-    async def _dispatch_push(self) -> None:
-        """One push per user and type, however many cells it covers: the inbox keeps one row per cell."""
-        groups: dict[tuple[int, str], list[tuple[Notification, Prediction | None, Cell | None]]] = {}
-        for row in await self._repository.find_pending(NotificationChannel.PUSH):
-            groups.setdefault((row[0].user_id, row[0].notification_type.type), []).append(row)
+    async def _dispatch_alert_emails(self, groups: dict[tuple[int, str], list]) -> None:
+        """US026/US028: one email per user and alert type, listing the cells of every date; the rows stay one per cell."""
+        if not groups:
+            return
+        limit = await self._repository.find_general_limit()
         for (user_id, type_code), rows in groups.items():
             try:
+                days: dict[date, list[str]] = {}
+                for _, prediction, cell in rows:
+                    if prediction is not None and cell is not None:
+                        days.setdefault(prediction.prediction_date.date(), []).append(cell.name)
+                if days:
+                    user = await self._users.find_by_id(user_id)
+                    items = sorted(days.items())
+                    if type_code == VOLTAGE_EXCEEDED:
+                        await send_voltage_forecast_notification(user.email, rows[0][0].created_at.date(), limit, items)
+                    else:
+                        await send_near_date_notification(user.email, rows[0][0].notification_type.message, limit, items)
+                await self._mark_sent([row[0] for row in rows])
+            except Exception:
+                logger.exception("Alert email of user %s (%s) could not be sent; it stays pending", user_id, type_code)
+
+    async def _dispatch_push(self) -> None:
+        """
+        One push per user and type (and date, for the reminders), however many cells it covers. The rows stay one per
+        cell; the text names the cells (E, D) or only points to the email (V).
+        """
+        groups: dict[tuple[int, str, date | None], list[tuple[Notification, Prediction | None, Cell | None]]] = {}
+        for row in await self._repository.find_pending(NotificationChannel.PUSH):
+            type_code, prediction = row[0].notification_type.type, row[1]
+            day = prediction.prediction_date.date() if prediction is not None and type_code in (DATE_NEAR, DATE_NEAR_2_DAYS) else None
+            groups.setdefault((row[0].user_id, type_code, day), []).append(row)
+        limit = await self._repository.find_general_limit() if any(code in ALERT_TYPES for _, code, _ in groups) else None
+        for (user_id, type_code, day), rows in groups.items():
+            try:
                 tokens = await self._repository.find_tokens(user_id)
-                if tokens:  # no phone to push to: the inbox is the delivery
-                    first, prediction, cell = rows[0]
-                    if len(rows) == 1:
-                        body = describe(type_code, cell.name if cell else None,
-                                        prediction.prediction_date if prediction else None,
-                                        prediction.predicted_voltage if prediction else None)
+                if tokens:  # no phone to push to: nothing to send
+                    first = rows[0][0]
+                    if type_code in ALERT_TYPES:
+                        body = alert_push_text(type_code, day, [cell.name for _, _, cell in rows if cell], limit)
+                    elif len(rows) == 1:
+                        body = describe(type_code, None, None, None)
                     else:
                         body = f"{len(rows)} avisos nuevos: revisa tu bandeja"
-                    invalid = await send_push(tokens, first.notification_type.message, body, {"notification_id": str(first.id)})
+                    invalid = await send_push(
+                        tokens, first.notification_type.message, body,
+                        VOLTAGE_ALERTS_CHANNEL if type_code in ALERT_TYPES else None,
+                    )
                     await self._repository.delete_tokens(invalid)
                 await self._mark_sent([row[0] for row in rows])
             except Exception:

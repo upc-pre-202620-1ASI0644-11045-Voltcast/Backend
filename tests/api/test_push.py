@@ -103,9 +103,9 @@ class TestPushDelivery:
     def test_the_phone_of_the_supervisor_gets_the_access_request(self, client, supervisor_headers, fake_push):
         add_device(client, supervisor_headers)
         register(client)
-        [(tokens, title, body, data)] = fake_push.calls
+        [(tokens, title, body)] = fake_push.calls
         assert tokens == [TOKEN] and title == "Nueva solicitud de registro" and "solicitud de acceso" in body
-        assert data["notification_id"].isdigit()
+        assert fake_push.channels == [None]  # the access request is not a voltage alert: default channel
         assert push_statuses(client) == [NotificationStatus.SENT]
 
     def test_a_user_without_phones_gets_the_inbox_only(self, client, fake_push):
@@ -140,7 +140,9 @@ class TestPushDelivery:
         request_training(client, engineer, cleaned_dataset(client, engineer))
         run_training(client)  # the training pushes the alerts itself
         assert {call[1] for call in fake_push.calls} == {"Voltaje excesivo pronosticado"}
-        assert len(fake_push.calls) == 1 and "5 avisos nuevos" in fake_push.calls[0][2]  # one push, not one per cell
+        # one push, not one per cell, and it points to the email
+        assert [call[2] for call in fake_push.calls] == ["Se han recibido nuevos pronósticos, revisa tu correo electrónico."]
+        assert fake_push.channels == ["voltage_alerts"]
 
     def test_the_training_pushes_its_alerts_right_away_and_a_push_failure_does_not_fail_it(
         self, client, supervisor_headers, register_engineer, fake_push
