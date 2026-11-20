@@ -74,7 +74,7 @@ async def refresh_token(
     response_model=UserResponse,
     status_code=201,
     summary="Request account creation",
-    dependencies=[Depends(rate_limit("register", max_requests=5, window_seconds=3600))],
+    dependencies=[Depends(rate_limit("register", max_requests=100, window_seconds=3600))],
 )
 async def register(
     request: RegisterRequest,
@@ -94,7 +94,7 @@ async def register(
     "/password-reset/request",
     response_model=MessageResponse,
     summary="Request a password reset code by email",
-    dependencies=[Depends(rate_limit("password-reset-request", max_requests=5, window_seconds=3600))],
+    dependencies=[Depends(rate_limit("password-reset-request", max_requests=25, window_seconds=3600))],
 )
 async def request_password_reset(
     request: RequestPasswordResetRequest,
@@ -112,7 +112,7 @@ async def request_password_reset(
     "/password-reset/confirm",
     response_model=MessageResponse,
     summary="Confirm the verification code and set a new password",
-    dependencies=[Depends(rate_limit("password-reset-confirm", max_requests=10, window_seconds=3600))],
+    dependencies=[Depends(rate_limit("password-reset-confirm", max_requests=25, window_seconds=3600))],
 )
 async def confirm_password_reset(
     request: ConfirmPasswordResetRequest,

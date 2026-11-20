@@ -37,9 +37,9 @@ def test_blocked_requests_tell_when_to_retry(client, fake_redis):
     assert "Too many requests" in response.json()["detail"]
 
 
-def test_register_allows_5_requests_per_hour(client, fake_redis):
-    statuses = [register(client, number).status_code for number in range(7)]
-    assert statuses == [201] * 5 + [429] * 2
+def test_register_allows_100_requests_per_hour(client, fake_redis):
+    statuses = [register(client, number).status_code for number in range(102)]
+    assert statuses == [201] * 100 + [429] * 2
 
 
 def test_every_endpoint_has_its_own_counter(client, fake_redis):
@@ -49,12 +49,12 @@ def test_every_endpoint_has_its_own_counter(client, fake_redis):
     assert register(client, 1).status_code == 201
 
 
-def test_password_reset_request_is_limited_to_5_per_hour(client, fake_redis, sent_codes):
+def test_password_reset_request_is_limited_to_25_per_hour(client, fake_redis, sent_codes):
     statuses = [
         client.post(f"{API}/auth/password-reset/request", json={"email": "a@voltcast.com"}).status_code
-        for _ in range(6)
+        for _ in range(26)
     ]
-    assert statuses == [200] * 5 + [429]
+    assert statuses == [200] * 25 + [429]
 
 
 def test_the_limiter_never_blocks_the_api_when_redis_is_down(client, monkeypatch):
