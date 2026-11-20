@@ -10,6 +10,7 @@ from notification_management.domain.model.aggregates.Notification import (
     NotificationType,
 )
 from notification_management.domain.repositories.NotificationRepository import NotificationRow
+from voltage_forecasting.domain.model.aggregates.AlertRule import AlertRule
 from voltage_forecasting.domain.model.aggregates.Prediction import Prediction
 
 
@@ -46,6 +47,13 @@ class NotificationRepositoryImpl:
             .order_by(Notification.id)
         )
         return [tuple(row) for row in result.unique().all()]
+
+    async def find_general_limit(self) -> float | None:
+        """The active maximum voltage that applies to every cell, for the text of the alerts."""
+        result = await self._session.execute(
+            select(AlertRule.max_voltage).where(AlertRule.is_active.is_(True), AlertRule.cell_id.is_(None)).limit(1)
+        )
+        return result.scalar_one_or_none()
 
     async def find_inbox(self, user_id: int, status: NotificationStatus | None, limit: int) -> list[NotificationRow]:
         """The push notifications of the user, the newest first: the inbox is where the push rows live."""

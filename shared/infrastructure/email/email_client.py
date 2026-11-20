@@ -1,4 +1,6 @@
+from datetime import date
 from email.message import EmailMessage
+from html import escape
 import os
 
 import aiosmtplib
@@ -65,6 +67,43 @@ async def send_account_rejected_notification(to: str, full_name: str | None) -> 
     <p>Tu solicitud de acceso fue rechazada. Si crees que es un error, contacta al supervisor.</p>
     """
     await send_email(to, "Tu cuenta fue rechazada", body)
+
+
+def _threshold(limit: float | None) -> str:
+    return f"el umbral de {limit:.2f} V" if limit is not None else "el umbral"
+
+
+def _day_items(days: list[tuple[date, list[str]]]) -> str:
+    """`days` are the (date, cell names) pairs, one list item per date."""
+    return "".join(
+        f"<li><b>{day:%d/%m/%Y}</b>: {', '.join(escape(name) for name in sorted(cells))}</li>" for day, cells in days
+    )
+
+
+async def send_voltage_forecast_notification(
+    to: str, generated_on: date, limit: float | None, days: list[tuple[date, list[str]]]
+) -> None:
+    """US026: `days` are the first date each group of cells goes above the limit in the forecast generated on `generated_on`."""
+    body = f"""
+    <p>Con el pronóstico generado el {generated_on:%d/%m/%Y}, estas son las primeras fechas en que cada grupo de celdas superaría {_threshold(limit)}:</p>
+    <ul>{_day_items(days)}</ul>
+    <p>Te recomendamos tomar nota de las fechas y celdas mencionadas.</p>
+    <p>Te volveremos a avisar sobre cualquier sobrecarga de voltaje 2 días y 1 día antes de cada fecha.</p>
+    """
+    subject = f"Pronósticos nuevos: celdas sobre {_threshold(limit)}" if limit is not None else "Pronósticos nuevos: celdas sobre el umbral"
+    await send_email(to, subject, body)
+
+
+async def send_near_date_notification(
+    to: str, subject: str, limit: float | None, days: list[tuple[date, list[str]]]
+) -> None:
+    """US028: reminder of the cells that exceed the limit on dates that are close; `subject` is the title of the alert."""
+    body = f"""
+    <p>Estas celdas superarían {_threshold(limit)} en las fechas indicadas:</p>
+    <ul>{_day_items(days)}</ul>
+    <p>Revisa estas celdas.</p>
+    """
+    await send_email(to, subject, body)
 
 
 async def send_verification_code(to: str, code: str) -> None:

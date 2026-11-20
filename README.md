@@ -235,7 +235,7 @@ Bounded Contexts
 - **E01: Notificación exitosa de exceso de voltaje**
   - **Dado que** el Ingeniero de Planta desea realizar pronósticos de voltaje
   - **Cuando** el sistema obtiene pronósticos donde se excede el umbral máximo permitido para una celda y fecha determinada
-  - **Entonces** el sistema notifica el incremento de voltaje al Ingeniero de Planta indicando la celda y fecha determinada.
+  - **Entonces** el sistema notifica el incremento de voltaje al Ingeniero de Planta indicando la celda y fecha determinada, por correo (con la primera fecha de exceso de cada celda) y con un push que remite al correo.
 - **E02: Pronóstico dentro del rango permitido**
   - **Dado que** el Ingeniero de Planta desea realizar pronósticos de voltaje
   - **Cuando** el sistema no obtiene pronósticos donde se excede el umbral máximo permitido para una celda y fecha determinada
@@ -257,11 +257,11 @@ Bounded Contexts
 
 - **E01: Notificación exitosa de proximidad de fecha**
   - **Dado que** el Ingeniero de Planta desea recibir una notificación sobre un voltaje excesivo pronosticado para una fecha próxima
-  - **Cuando** el sistema detecta que el tiempo para llegar a la fecha pronosticada es en un día o menos
-  - **Entonces** el sistema notifica al Ingeniero de Planta recordándole revisar la celda correspondiente.
+  - **Cuando** el sistema detecta que el tiempo para llegar a la fecha pronosticada es de 2 días o de 1 día
+  - **Entonces** el sistema notifica al Ingeniero de Planta, por correo y por push, recordándole revisar las celdas correspondientes (un aviso a 2 días y otro a 1 día).
 - **E02: Notificación no enviada**
   - **Dado que** el Ingeniero de Planta desea recibir una notificación sobre un voltaje excesivo pronosticado para una fecha próxima
-  - **Cuando** el sistema detecta que el tiempo para llegar a la fecha pronosticada no es en un día o menos
+  - **Cuando** el sistema detecta que el tiempo para llegar a la fecha pronosticada no es de 2 días ni de 1 día
   - **Entonces** el sistema no notifica al Ingeniero de Planta recordándole revisar la celda correspondiente todavía.
 
 ##### US029 · Recibir una notificación cuando mi cuenta haya sido aceptada en el sistema

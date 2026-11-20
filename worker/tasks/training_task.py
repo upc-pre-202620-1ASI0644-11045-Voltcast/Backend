@@ -75,12 +75,12 @@ async def _publish(session, storage, execution: TrainingExecution, model: MlMode
     await session.commit()
 
 
-async def _push_alerts(session) -> None:
-    """US026: the alerts queued by the training reach the phones now. A failure leaves them pending for the scheduled Job."""
+async def _send_alerts(session) -> None:
+    """US026: the alerts queued by the training are emailed and pushed now. A failure leaves them pending for the scheduled Job."""
     try:
-        await notifier_for(session).dispatch_pending((NotificationChannel.PUSH,))
+        await notifier_for(session).dispatch_pending((NotificationChannel.EMAIL, NotificationChannel.PUSH))
     except Exception:
-        logger.exception("The alerts could not be pushed; the scheduled Job will retry")
+        logger.exception("The alerts could not be sent; the scheduled Job will retry")
 
 
 async def process_training(message: dict, storage) -> None:
@@ -102,7 +102,7 @@ async def process_training(message: dict, storage) -> None:
             silver = pd.read_parquet(BytesIO(await storage.read(dataset.processed_path)), engine="pyarrow")
             result = await asyncio.to_thread(train, silver)
             await _publish(session, storage, execution, model, result)
-            await _push_alerts(session)
+            await _send_alerts(session)
             logger.info("Training %s done: model %s %s, %s", execution_id, model.name, model.version, result.metrics)
         except TrainingDataError as error:
             await session.rollback()

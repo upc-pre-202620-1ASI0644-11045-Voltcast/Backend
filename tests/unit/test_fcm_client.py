@@ -46,7 +46,7 @@ def run_against(monkeypatch, handler, tokens):
             base = f"http://127.0.0.1:{server.port}"
             monkeypatch.setattr(fcm_client, "TOKEN_URL", f"{base}/token")
             monkeypatch.setattr(fcm_client, "FCM_URL", base + "/fcm/{project}")
-            return await fcm_client.send_push(tokens, "Title", "Body", {"notification_id": "7"})
+            return await fcm_client.send_push(tokens, "Title", "Body")
         finally:
             await server.close()
 
@@ -68,7 +68,28 @@ def test_returns_the_tokens_fcm_does_not_know_and_sends_the_message(configured, 
         return web.json_response({"name": "ok"})
 
     assert run_against(monkeypatch, fcm, ["good", "gone", "bad"]) == ["gone", "bad"]
-    assert seen[0] == {"token": "good", "notification": {"title": "Title", "body": "Body"}, "data": {"notification_id": "7"}}
+    assert seen[0] == {"token": "good", "notification": {"title": "Title", "body": "Body"}}
+
+
+def test_a_channel_goes_in_the_android_block_with_high_priority(configured, monkeypatch):
+    seen = []
+
+    async def fcm(request):
+        seen.append((await request.json())["message"])
+        return web.json_response({"name": "ok"})
+
+    async def scenario():
+        server = await fake_google(fcm)
+        try:
+            base = f"http://127.0.0.1:{server.port}"
+            monkeypatch.setattr(fcm_client, "TOKEN_URL", f"{base}/token")
+            monkeypatch.setattr(fcm_client, "FCM_URL", base + "/fcm/{project}")
+            await fcm_client.send_push(["good"], "Title", "Body", "voltage_alerts")
+        finally:
+            await server.close()
+
+    asyncio.run(scenario())
+    assert seen[0]["android"] == {"priority": "HIGH", "notification": {"channel_id": "voltage_alerts"}}
 
 
 def test_any_other_error_is_raised_so_the_notification_is_retried(configured, monkeypatch):
@@ -82,4 +103,4 @@ def test_any_other_error_is_raised_so_the_notification_is_retried(configured, mo
 def test_says_so_when_firebase_is_not_configured(monkeypatch):
     monkeypatch.delenv("FIREBASE_CREDENTIALS_JSON", raising=False)
     with pytest.raises(fcm_client.PushNotConfigured):
-        asyncio.run(fcm_client.send_push(["good"], "Title", "Body", {}))
+        asyncio.run(fcm_client.send_push(["good"], "Title", "Body"))
