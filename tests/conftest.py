@@ -8,6 +8,7 @@ service read it at import time (values already in the environment win over the d
 import os
 import shutil
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -49,6 +50,12 @@ def small_workbooks(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def alerts_today(monkeypatch):
+    """The synthetic workbooks start in 2020 and their forecasts are in the past; the alerts only look from today on, so today is 2020-01-01."""
+    monkeypatch.setattr("worker.tasks.voltage_alerts.utc_now_naive", lambda: datetime(2020, 1, 1, 8, 0))
+
+
+@pytest.fixture(autouse=True)
 def empty_storage():
     """The uploaded files and the queued tasks live on disk, so every test starts without them."""
     shutil.rmtree(os.environ["LOCAL_STORAGE_DIR"], ignore_errors=True)
@@ -69,13 +76,14 @@ def sent_emails(monkeypatch) -> list[tuple[str, str]]:
 @pytest.fixture(autouse=True)
 def fake_push(monkeypatch) -> SimpleNamespace:
     """Replaces FCM: every call is collected in `calls`. Put tokens in `invalid` to have FCM refuse them, or set `fail`."""
-    push = SimpleNamespace(calls=[], channels=[], invalid=[], fail=False)
+    push = SimpleNamespace(calls=[], channels=[], data=[], invalid=[], fail=False)
 
-    async def send(tokens, title, body, channel_id=None):
+    async def send(tokens, title, body, channel_id=None, data=None):
         if push.fail:
             raise ConnectionError("FCM is down")
         push.calls.append((tokens, title, body))
         push.channels.append(channel_id)
+        push.data.append(data)
         return [token for token in tokens if token in push.invalid]
 
     monkeypatch.setattr(

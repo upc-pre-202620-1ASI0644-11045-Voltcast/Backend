@@ -64,7 +64,7 @@ async def send_account_rejected_notification(to: str, full_name: str | None) -> 
     name = full_name or "Usuario"
     body = f"""
     <p>Hola {name},</p>
-    <p>Tu solicitud de acceso fue rechazada. Si crees que es un error, contacta al supervisor.</p>
+    <p>Tu solicitud de acceso fue rechazada. Si crees que es un error, contacta a un supervisor.</p>
     """
     await send_email(to, "Tu cuenta fue rechazada", body)
 

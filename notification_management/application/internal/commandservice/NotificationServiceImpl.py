@@ -20,6 +20,7 @@ from notification_management.domain.model.aggregates.Notification import (
     Notification,
     NotificationChannel,
     NotificationStatus,
+    OPEN_MAIL_DATA,
     alert_push_text,
     describe,
 )
@@ -140,6 +141,7 @@ class NotificationServiceImpl:
                     invalid = await send_push(
                         tokens, first.notification_type.message, body,
                         VOLTAGE_ALERTS_CHANNEL if type_code in ALERT_TYPES else None,
+                        OPEN_MAIL_DATA if type_code in ALERT_TYPES else None,  # these pushes go with an email
                     )
                     await self._repository.delete_tokens(invalid)
                 await self._mark_sent([row[0] for row in rows])

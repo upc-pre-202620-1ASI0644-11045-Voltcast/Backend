@@ -21,8 +21,7 @@ class TestAlertPushText:
     def test_more_than_three_cells_say_how_many_more_and_point_to_the_email(self):
         text = alert_push_text(DATE_NEAR, DAY, ["A1", "A2", "A3", "A4", "A5"], 3.1)
         assert text == (
-            "Para el 20/11/2026 las celdas A1, A2, A3 y 2 más superarán el umbral de 3.10 V. "
-            "Revisa tu correo electrónico para ver el detalle"
+            "Para el 20/11/2026 las celdas A1, A2, A3 y 2 más superarán el umbral de 3.10 V. Revisa tu email"
         )
 
     def test_the_new_forecasts_push_only_points_to_the_email(self):
