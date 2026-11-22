@@ -92,6 +92,28 @@ def test_a_channel_goes_in_the_android_block_with_high_priority(configured, monk
     assert seen[0]["android"] == {"priority": "HIGH", "notification": {"channel_id": "voltage_alerts"}}
 
 
+def test_data_goes_in_the_message_only_when_given(configured, monkeypatch):
+    seen = []
+
+    async def fcm(request):
+        seen.append((await request.json())["message"])
+        return web.json_response({"name": "ok"})
+
+    async def scenario():
+        server = await fake_google(fcm)
+        try:
+            base = f"http://127.0.0.1:{server.port}"
+            monkeypatch.setattr(fcm_client, "TOKEN_URL", f"{base}/token")
+            monkeypatch.setattr(fcm_client, "FCM_URL", base + "/fcm/{project}")
+            await fcm_client.send_push(["good"], "Title", "Body", "voltage_alerts", {"action": "open_mail"})
+            await fcm_client.send_push(["good"], "Title", "Body")
+        finally:
+            await server.close()
+
+    asyncio.run(scenario())
+    assert seen[0]["data"] == {"action": "open_mail"} and "data" not in seen[1]
+
+
 def test_any_other_error_is_raised_so_the_notification_is_retried(configured, monkeypatch):
     async def fcm(request):
         return web.Response(status=500)

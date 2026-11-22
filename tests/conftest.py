@@ -76,13 +76,14 @@ def sent_emails(monkeypatch) -> list[tuple[str, str]]:
 @pytest.fixture(autouse=True)
 def fake_push(monkeypatch) -> SimpleNamespace:
     """Replaces FCM: every call is collected in `calls`. Put tokens in `invalid` to have FCM refuse them, or set `fail`."""
-    push = SimpleNamespace(calls=[], channels=[], invalid=[], fail=False)
+    push = SimpleNamespace(calls=[], channels=[], data=[], invalid=[], fail=False)
 
-    async def send(tokens, title, body, channel_id=None):
+    async def send(tokens, title, body, channel_id=None, data=None):
         if push.fail:
             raise ConnectionError("FCM is down")
         push.calls.append((tokens, title, body))
         push.channels.append(channel_id)
+        push.data.append(data)
         return [token for token in tokens if token in push.invalid]
 
     monkeypatch.setattr(

@@ -199,6 +199,7 @@ class TestDateNear:  # US028
         assert pushes["Revisa la celda: voltaje excesivo próximo"].startswith("Para el 02/01/2030 la celda ")
         assert pushes["Revisa la celda: voltaje excesivo en 2 días"].startswith("Para el 03/01/2030 la celda ")
         assert all(body.endswith("superará el umbral de 1.00 V") for body in pushes.values())
+        assert fake_push.data == [{"action": "open_mail"}] * len(fake_push.calls)
         emails = {subject: body for _, subject, body in mails}
         assert "<b>02/01/2030</b>" in emails["Revisa la celda: voltaje excesivo próximo"]
         assert "<b>03/01/2030</b>" in emails["Revisa la celda: voltaje excesivo en 2 días"]

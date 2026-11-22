@@ -60,6 +60,8 @@ ALERT_TYPES = (VOLTAGE_EXCEEDED, DATE_NEAR_2_DAYS, DATE_NEAR)
 # Android channel of their push (the app creates it with high importance; the id must match exactly).
 VOLTAGE_ALERTS_CHANNEL = "voltage_alerts"
 MAX_CELLS_IN_PUSH = 3
+# `data` of the pushes that go with an email: the app opens the mail app when they are tapped.
+OPEN_MAIL_DATA = {"action": "open_mail"}
 
 
 def alert_push_text(type_code: str, day: date | None, cells: list[str], limit: float | None) -> str:
@@ -73,8 +75,7 @@ def alert_push_text(type_code: str, day: date | None, cells: list[str], limit: f
     shown = ", ".join(names[:MAX_CELLS_IN_PUSH])
     if len(names) <= MAX_CELLS_IN_PUSH:
         return f"Para el {day:%d/%m/%Y} las celdas {shown} superarán {threshold}"
-    return (f"Para el {day:%d/%m/%Y} las celdas {shown} y {len(names) - MAX_CELLS_IN_PUSH} más superarán {threshold}. "
-            "Revisa tu correo electrónico para ver el detalle")
+    return f"Para el {day:%d/%m/%Y} las celdas {shown} y {len(names) - MAX_CELLS_IN_PUSH} más superarán {threshold}. Revisa tu email"
 
 
 def describe(type_code: str, cell_name: str | None, prediction_date: datetime | None, voltage: float | None) -> str:
