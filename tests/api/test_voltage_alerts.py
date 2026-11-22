@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import func, select, update
@@ -25,7 +25,7 @@ from tests.api.test_training import (  # noqa: F401  small_network is an autouse
     small_network,
 )
 from voltage_forecasting.domain.model.aggregates.Prediction import Prediction
-from worker.tasks.voltage_alerts import remind_near_exceedances
+from worker.tasks.voltage_alerts import remind_near_exceedances, replace_voltage_alerts
 
 CELLS = 5  # the synthetic workbooks of the training tests have 5 cells
 
@@ -79,6 +79,29 @@ class TestVoltageExceeded:  # US026
             return first == notified
 
         assert db(client, first_days_match)
+
+    def test_forecast_days_before_today_are_not_the_first_day_of_the_alert(self, client, engineer_headers, supervisor_headers):
+        force_limit(client, 1.0)
+        train(client, engineer_headers)
+
+        async def replace_from_the_third_day(session):
+            first = (await session.execute(select(func.min(Prediction.prediction_date)))).scalar()
+            today = first.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=2)
+            model_id = (await session.execute(select(Prediction.model_id).limit(1))).scalar()
+            await replace_voltage_alerts(session, model_id, now=today + timedelta(hours=8))
+            await session.commit()
+            expected = set((await session.execute(
+                select(Prediction.cell_id, func.min(Prediction.prediction_date))
+                .where(Prediction.prediction_date >= today).group_by(Prediction.cell_id)
+            )).all())
+            notified = set((await session.execute(
+                select(Prediction.cell_id, Prediction.prediction_date).join(Notification, Notification.prediction_id == Prediction.id)
+            )).all())
+            return today, expected, notified
+
+        today, expected, notified = db(client, replace_from_the_third_day)
+        assert notified == expected and len(notified) == CELLS
+        assert all(day >= today for _, day in notified)
 
     def test_the_engineer_gets_one_email_with_the_dates_and_a_push_that_points_to_it(
         self, client, engineer_headers, supervisor_headers, fake_push, mails

@@ -8,6 +8,7 @@ service read it at import time (values already in the environment win over the d
 import os
 import shutil
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -46,6 +47,12 @@ async def _reset_database() -> None:
 def small_workbooks(monkeypatch):
     """The ETL asks for 900 days; the workbooks of the tests are small. The tests of that rule put it back."""
     monkeypatch.setattr("worker.etl.config.MIN_DAYS", 10)
+
+
+@pytest.fixture(autouse=True)
+def alerts_today(monkeypatch):
+    """The synthetic workbooks start in 2020 and their forecasts are in the past; the alerts only look from today on, so today is 2020-01-01."""
+    monkeypatch.setattr("worker.tasks.voltage_alerts.utc_now_naive", lambda: datetime(2020, 1, 1, 8, 0))
 
 
 @pytest.fixture(autouse=True)
