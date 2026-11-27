@@ -293,6 +293,49 @@ Bounded Contexts
 - Python 3.13
 - FastAPI
 
+## Pruebas
+
+Las pruebas usan **pytest** y están en la carpeta [`tests/`](tests/):
+
+| Carpeta                                    | Qué prueba                                                                                                                |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| [`tests/unit/`](tests/unit/)               | Lógica de dominio (celdas, usuarios), ETL, entrenamiento, cliente FCM, textos de alertas y sincronización de esquemas     |
+| [`tests/api/`](tests/api/)                 | Endpoints de la API con `TestClient`: auth, usuarios, celdas, componentes, datasets, Drive, ETL, pronósticos, alertas, push |
+| [`tests/integration/`](tests/integration/) | Adaptadores de Azure Storage contra el emulador Azurite                                                                   |
+
+La configuración está en [`pytest.ini`](pytest.ini) y las fixtures compartidas en [`tests/conftest.py`](tests/conftest.py).
+No hace falta una base de datos ni Redis: `conftest.py` usa un SQLite temporal, desactiva el rate limiter y crea un
+Supervisor de prueba, sin tocar tu `.env`.
+
+### Ejecutarlas
+
+Instala las dependencias de desarrollo (incluyen las del worker, como `pandas` y `numpy`, que varias pruebas necesitan):
+
+```powershell
+pip install -r requirements-dev.txt
+```
+
+Ejecuta toda la suite desde la raíz del proyecto:
+
+```powershell
+python -m pytest
+```
+
+Ejemplos para ejecutar solo una parte:
+
+```powershell
+python -m pytest tests/unit              # solo las unitarias
+python -m pytest tests/api/test_cells.py # un archivo
+python -m pytest -k password             # pruebas cuyo nombre contiene "password"
+```
+
+Las pruebas de [`tests/integration/`](tests/integration/) se omiten salvo que la variable
+`AZURE_STORAGE_TEST_CONNECTION_STRING` tenga la cadena de conexión de Azurite (nunca una cuenta real: vacía las colas):
+
+```powershell
+azurite --silent --location .azurite --skipApiVersionCheck
+```
+
 ## Roles
 
 1) Supervisor: ADMIN
