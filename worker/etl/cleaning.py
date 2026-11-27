@@ -13,6 +13,7 @@ CALIDAD = ["ok", "interpolado", "hueco", "atipico", "paro", "fuera_servicio"]
 
 
 def cell_name(el: str, n: int | str) -> str:
+    """Build the standard cell name from electrolyzer and cell number."""
     return f"{el}_c{int(n):03d}"
 
 
@@ -35,6 +36,7 @@ def daily_wide(bronze: pd.DataFrame, el: str, cell_cols: list[str], calendar: pd
 
 
 def calendar_from(*bronzes: pd.DataFrame) -> pd.DatetimeIndex:
+    """Return the daily calendar that covers all the given tables."""
     fechas = pd.concat([b[DATE_COL].dt.normalize() for b in bronzes])
     return pd.date_range(fechas.min(), fechas.max(), freq="D", name="fecha")
 
@@ -158,6 +160,7 @@ def silver_section(wide: pd.DataFrame, el: str) -> tuple[pd.DataFrame, pd.DataFr
 
 
 def finalize_long(parts: list[pd.DataFrame]) -> pd.DataFrame:
+    """Concatenate the cleaned parts into one sorted long table."""
     df = pd.concat(parts, ignore_index=True)
     df["electrolizador"] = df["electrolizador"].astype("category")
     df["celda"] = df["celda"].astype("category")
@@ -166,6 +169,7 @@ def finalize_long(parts: list[pd.DataFrame]) -> pd.DataFrame:
 
 
 def temporal_split(calendar: pd.DatetimeIndex, val_fraction: float = config.VAL_FRACTION) -> dict:
+    """Split the calendar into train and validation periods in time order."""
     n = len(calendar)
     n_val = round(n * val_fraction)
     train, val = calendar[: n - n_val], calendar[n - n_val:]

@@ -25,6 +25,7 @@ async def list_datasets(
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """List the uploaded datasets."""
     try:
         service = DatasetQueryServiceImpl(DatasetRepositoryImpl(db), get_file_storage())
         datasets = await service.get_all_datasets(DatasetResourceAssembler.to_get_all_query())
@@ -39,6 +40,7 @@ async def get_dataset(
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Return the processing status and summary of a dataset."""
     try:
         service = DatasetQueryServiceImpl(DatasetRepositoryImpl(db), get_file_storage())
         dataset = await service.get_dataset_by_id(DatasetResourceAssembler.to_get_by_id_query(dataset_id))
@@ -82,6 +84,7 @@ async def confirm_merge(
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Accept the merge shown for a dataset so it gets processed."""
     try:
         service = DatasetCommandServiceImpl(
             DatasetRepositoryImpl(db), get_file_storage(), get_task_queue(), TrainingRepositoryImpl(db).exists_running

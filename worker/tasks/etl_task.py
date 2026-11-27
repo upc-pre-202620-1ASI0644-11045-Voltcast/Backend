@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 def _parquet(df) -> bytes:
+    """Serialize a DataFrame to Parquet bytes."""
     buffer = BytesIO()
     df.to_parquet(buffer, engine="pyarrow", index=False)
     return buffer.getvalue()

@@ -39,6 +39,7 @@ def _exceeding():
 
 
 async def _type_ids(session, *codes: str) -> dict[str, int]:
+    """Map notification type codes to their ids."""
     rows = await session.execute(select(NotificationType.type, NotificationType.id).where(NotificationType.type.in_(codes)))
     return dict(rows.all())
 
@@ -68,6 +69,7 @@ async def _queue(session, code: str, prediction_ids: list[int]) -> None:
 
 
 def _today(now: datetime | None) -> datetime:
+    """Return midnight of the given moment, or of today."""
     return (now or utc_now_naive()).replace(hour=0, minute=0, second=0, microsecond=0)
 
 

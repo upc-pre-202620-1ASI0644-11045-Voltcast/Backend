@@ -24,7 +24,9 @@ class LocalTaskQueue:
         self._root = root
 
     async def send(self, queue: str, message: dict) -> None:
+        """Write a message as a file in the queue folder."""
         def write() -> None:
+            """Create the message file through a temporary file and a rename."""
             folder = self._root / queue
             folder.mkdir(parents=True, exist_ok=True)
             name = f"{time.time_ns():020d}-{uuid4().hex}"
@@ -36,6 +38,7 @@ class LocalTaskQueue:
     async def receive(self, queue: str) -> tuple[dict, Path] | None:
         """The oldest message and the handle to delete it once it has been handled, or None when the queue is empty."""
         def read() -> tuple[dict, Path] | None:
+            """Read the oldest message of the queue, if any."""
             for path in sorted((self._root / queue).glob("*.json")):
                 return json.loads(path.read_text(encoding="utf-8")), path
             return None
@@ -43,6 +46,7 @@ class LocalTaskQueue:
         return await asyncio.to_thread(read)
 
     async def delete(self, handle: Path) -> None:
+        """Delete the file of a processed message."""
         await asyncio.to_thread(handle.unlink, True)
 
     def pending(self, queue: str) -> list[dict]:
@@ -64,25 +68,30 @@ class AzureTaskQueue:
         self._connection_string = connection_string
 
     def _client(self, queue: str) -> QueueClient:
+        """Return a client for one Azure queue."""
         return QueueClient.from_connection_string(self._connection_string, queue)
 
     async def send(self, queue: str, message: dict) -> None:
+        """Send a message to an Azure queue."""
         async with self._client(queue) as client:
             await client.send_message(json.dumps(message))
 
     async def receive(self, queue: str) -> tuple[dict, tuple] | None:
+        """Receive one message and hide it from other consumers for a while."""
         async with self._client(queue) as client:
             async for received in client.receive_messages(max_messages=1, visibility_timeout=self.VISIBILITY_SECONDS):
                 return json.loads(received.content), (queue, received)
         return None
 
     async def delete(self, handle: tuple) -> None:
+        """Delete a processed message from its queue."""
         queue, received = handle
         async with self._client(queue) as client:
             await client.delete_message(received)
 
 
 def get_task_queue() -> LocalTaskQueue | AzureTaskQueue:
+    """Return the Azure queue if configured, otherwise the local one."""
     connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     if connection_string:
         return AzureTaskQueue(connection_string)

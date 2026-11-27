@@ -13,9 +13,11 @@ class DatasetQueryServiceImpl:
         self._storage = storage
 
     async def get_dataset_by_id(self, query: GetDatasetByIdQuery) -> UploadedDataset | None:
+        """Return the dataset with the requested id, if any."""
         return await self._repository.find_by_id(query.dataset_id)
 
     async def get_all_datasets(self, query: GetAllDatasetsQuery) -> list[UploadedDataset]:
+        """Return all uploaded datasets."""
         return await self._repository.find_all()
 
     async def get_summary(self, dataset: UploadedDataset) -> dict | None:

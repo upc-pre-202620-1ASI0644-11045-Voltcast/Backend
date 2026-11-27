@@ -15,9 +15,11 @@ class TrainingQueryServiceImpl:
         self._repository = repository
 
     async def get_training_by_id(self, query: GetTrainingByIdQuery) -> TrainingExecution | None:
+        """Return the training run with the requested id, if any."""
         return await self._repository.find_by_id(query.training_id)
 
     async def get_all_trainings(self, query: GetAllTrainingsQuery) -> list[TrainingExecution]:
+        """Return all training runs."""
         return await self._repository.find_all()
 
 
@@ -27,4 +29,5 @@ class AlertRuleQueryServiceImpl:
         self._repository = repository
 
     async def get_alert_rules(self, query: GetAlertRulesQuery) -> list[AlertRule]:
+        """Return the alert rules in force."""
         return await self._repository.find_all_active()

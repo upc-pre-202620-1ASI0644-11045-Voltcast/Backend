@@ -33,6 +33,7 @@ class Prepared:
 
 
 def _pivot(silver: pd.DataFrame, value: str, cells: list[str]) -> pd.DataFrame:
+    """Pivot one silver column into a date by cell table."""
     w = silver.pivot(index="fecha", columns="celda", values=value)
     w.columns = w.columns.astype(str)
     return w[cells]
@@ -66,6 +67,7 @@ def covariates_z(silver: pd.DataFrame, cells: list[str], dates: pd.DatetimeIndex
 
 
 def prepare(silver: pd.DataFrame, n_jobs: int = -1) -> Prepared:
+    """Filter and transform the silver data into the inputs used for training."""
     cells = sorted(silver["celda"].astype(str).unique())
     quality = _pivot(silver, "calidad", cells).astype(str)
     v = _pivot(silver, "voltaje", cells)

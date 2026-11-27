@@ -52,6 +52,7 @@ class NotificationServiceImpl:
         self._users = user_repository
 
     async def notify(self, type_code: str, users: list[User]) -> None:
+        """Store a notification per user and channel, then dispatch the pending ones."""
         notification_type = await self._repository.find_type(type_code)
         if notification_type is None:
             raise ValueError(f"Unknown notification type: {type_code}")
@@ -62,6 +63,7 @@ class NotificationServiceImpl:
         await self.dispatch_pending()
 
     async def notify_supervisors(self, type_code: str) -> None:
+        """Notify every active supervisor."""
         supervisors = [
             user for user in await self._users.find_all(UserStatus.ACTIVE) if user.role and user.role.name == ROLE_ADMIN
         ]
@@ -90,6 +92,7 @@ class NotificationServiceImpl:
             await self._dispatch_push()
 
     async def _mark_sent(self, notifications: list[Notification]) -> None:
+        """Save the notifications as sent."""
         for notification in notifications:
             notification.status = NotificationStatus.SENT
             await self._repository.save(notification)
@@ -149,6 +152,7 @@ class NotificationServiceImpl:
                 logger.exception("Push of user %s (%s) could not be sent; it stays pending", user_id, type_code)
 
     async def _send_email(self, notification: Notification, user: User) -> None:
+        """Send the email that corresponds to the notification type."""
         type_code = notification.notification_type.type
         if type_code == PASSWORD_CHANGED:
             await send_password_changed_notification(user.email, user.full_name)
@@ -167,6 +171,7 @@ class NotificationServiceImpl:
     # ---- inbox and devices of the signed-in user ----
 
     async def mark_read(self, user_id: int, notification_id: int) -> None:
+        """Mark a notification owned by the user as read."""
         notification = await self._repository.find_owned(user_id, notification_id)
         if notification is None:
             raise EntityNotFoundException("Notification", notification_id)
@@ -182,6 +187,7 @@ class NotificationServiceImpl:
         return await self._repository.save_device(device)
 
     async def unregister_device(self, user_id: int, device_id: int) -> None:
+        """Remove a device of the user so it stops receiving pushes."""
         device = await self._repository.find_device(user_id, device_id)
         if device is None:
             raise EntityNotFoundException("Device", device_id)

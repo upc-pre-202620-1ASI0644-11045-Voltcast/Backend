@@ -10,12 +10,14 @@ class ComponentRepositoryImpl:
         self._session = session
 
     async def save_component(self, component: Component) -> Component:
+        """Persist a component and return it refreshed."""
         self._session.add(component)
         await self._session.commit()
         await self._session.refresh(component)
         return component
 
     async def find_component_by_id(self, component_id: int) -> Component | None:
+        """Find a component by its id."""
         result = await self._session.execute(
             select(Component).where(Component.id == component_id)
         )
@@ -28,6 +30,7 @@ class ComponentRepositoryImpl:
         is_active: bool | None = None,
         visible_only: bool = True,
     ) -> list[Component]:
+        """List components, newest first, applying the given filters."""
         stmt = select(Component)
         filters = []
         if visible_only:
@@ -45,10 +48,12 @@ class ComponentRepositoryImpl:
         return list(result.scalars().all())
 
     async def find_by_serial_code(self, serial_code: str) -> Component | None:
+        """Find a component by its serial code."""
         result = await self._session.execute(select(Component).where(Component.serial_code == serial_code))
         return result.scalar_one_or_none()
 
     async def exists_by_serial_code(self, serial_code: str) -> bool:
+        """Tell whether a component with this serial code exists."""
         result = await self._session.execute(
             select(Component.id).where(Component.serial_code == serial_code)
         )
@@ -65,5 +70,6 @@ class ComponentRepositoryImpl:
         return components
 
     async def delete_component(self, component: Component) -> None:
+        """Delete a component and commit."""
         await self._session.delete(component)
         await self._session.commit()

@@ -29,14 +29,17 @@ class Component(Base):
     cell_id: Mapped[int | None] = mapped_column(SmallInt, ForeignKey("cell.id"), nullable=True)
 
     def assign_to(self, cell_id: int) -> None:
+        """Assign this active component to a cell."""
         if not self.is_active:
             raise ValueError("Cannot assign a disabled component")
         self.cell_id = cell_id
 
     def unassign(self) -> None:
+        """Release this component from its cell."""
         self.cell_id = None
 
     def disable(self) -> None:
+        """Disable this component if it is active and unassigned."""
         if not self.is_active:
             raise ValueError("Component is already disabled")
         if self.cell_id is not None:
@@ -65,6 +68,7 @@ class Component(Base):
         self.cell_id = cell_id
 
     def update_info(self, serial_code: str | None = None, component_type: ComponentType | None = None) -> None:
+        """Change the serial code and/or type of the component."""
         if serial_code is not None:
             self.serial_code = serial_code
         if component_type is not None:

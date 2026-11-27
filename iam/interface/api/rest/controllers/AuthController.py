@@ -44,6 +44,7 @@ async def login(
     request: SignInRequest,
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Log in with email and password."""
     try:
         service = CommandServiceImpl(UserRepositoryImpl(db), notifier_for(db))
         auth_response = await service.sign_in(AuthResourceAssembler.to_sign_in_command(request))
@@ -59,6 +60,7 @@ async def refresh_token(
     request: RefreshTokenRequest,
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Issue a new access token from a refresh token."""
     try:
         service = CommandServiceImpl(UserRepositoryImpl(db), notifier_for(db))
         access_token = await service.refresh_access_token(request.refresh_token)
@@ -80,6 +82,7 @@ async def register(
     request: RegisterRequest,
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Request the creation of an account."""
     try:
         service = CommandServiceImpl(UserRepositoryImpl(db), notifier_for(db))
         user = await service.register(AuthResourceAssembler.to_register_command(request))
@@ -100,6 +103,7 @@ async def request_password_reset(
     request: RequestPasswordResetRequest,
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Request a password reset code by email."""
     try:
         service = PasswordResetServiceImpl(PasswordResetRepositoryImpl(db), UserRepositoryImpl(db), notifier_for(db))
         await service.request_reset(AuthResourceAssembler.to_request_reset_command(request))
@@ -118,6 +122,7 @@ async def confirm_password_reset(
     request: ConfirmPasswordResetRequest,
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Confirm the verification code and set a new password."""
     try:
         service = PasswordResetServiceImpl(PasswordResetRepositoryImpl(db), UserRepositoryImpl(db), notifier_for(db))
         await service.confirm_reset(AuthResourceAssembler.to_confirm_reset_command(request))
@@ -134,4 +139,5 @@ async def confirm_password_reset(
 
 @router.get("/me", response_model=UserResponse, summary="Get current user")
 async def get_current_user_info(current_user: User = Depends(get_current_active_user)):
+    """Return the authenticated user."""
     return AuthResourceAssembler.to_user_response(current_user)

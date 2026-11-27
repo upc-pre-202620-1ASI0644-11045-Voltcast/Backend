@@ -21,6 +21,7 @@ def utcnow() -> datetime:
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
+    """Mark a naive datetime as UTC, keeping None as is."""
     return value.replace(tzinfo=timezone.utc) if value else None
 
 
@@ -76,6 +77,7 @@ class DriveServiceImpl:
         return True
 
     async def status(self) -> dict:
+        """Return the state of the Drive connection."""
         connection = await self._session.get(DriveConnection, 1)
         if connection is None:
             return {"connected": False, "account": None, "lastSyncAt": None, "error": None, "connectedAt": None}

@@ -16,12 +16,14 @@ class ForecastRepositoryImpl:
         self._session = session
 
     async def find_active_model(self) -> MlModel | None:
+        """Find the newest active model."""
         result = await self._session.execute(
             select(MlModel).where(MlModel.is_active.is_(True)).order_by(MlModel.id.desc()).limit(1)
         )
         return result.scalar_one_or_none()
 
     async def prediction_date_range(self, model_id: int) -> tuple[date, date] | None:
+        """Return the first and last predicted days of a model."""
         result = await self._session.execute(
             select(func.min(Prediction.prediction_date), func.max(Prediction.prediction_date))
             .where(Prediction.model_id == model_id)
@@ -32,6 +34,7 @@ class ForecastRepositoryImpl:
     async def find_predictions(
         self, model_id: int, start: datetime, end_exclusive: datetime, cell_id: int | None
     ) -> list[tuple[Prediction, str]]:
+        """List the predictions of visible cells in a period, ordered by date and cell."""
         stmt = (
             select(Prediction, Cell.name)
             .join(Cell, Cell.id == Prediction.cell_id)
@@ -49,6 +52,7 @@ class ForecastRepositoryImpl:
         return [(prediction, name) for prediction, name in result.all()]
 
     async def find_latest_success(self, model_id: int) -> TrainingExecution | None:
+        """Find the latest successful training run of a model."""
         result = await self._session.execute(
             select(TrainingExecution)
             .where(TrainingExecution.model_id == model_id, TrainingExecution.status == TrainingStatus.SUCCESS)
@@ -57,6 +61,7 @@ class ForecastRepositoryImpl:
         return result.scalar_one_or_none()
 
     async def evaluation_date_range(self, model_id: int) -> tuple[date, date] | None:
+        """Return the first and last evaluated days of a model."""
         result = await self._session.execute(
             select(func.min(ModelEvaluationResult.prediction_date), func.max(ModelEvaluationResult.prediction_date))
             .join(ModelEvaluation, ModelEvaluation.id == ModelEvaluationResult.model_evaluation_id)
@@ -66,6 +71,7 @@ class ForecastRepositoryImpl:
         return (first.date(), last.date()) if first is not None else None
 
     async def find_evaluation(self, model_id: int, day: date) -> list[tuple[ModelEvaluationResult, str]]:
+        """List the evaluation results of visible cells for one day."""
         start = datetime.combine(day, time.min)
         result = await self._session.execute(
             select(ModelEvaluationResult, Cell.name)
@@ -83,6 +89,7 @@ class ForecastRepositoryImpl:
     async def find_evaluation_range(
         self, model_id: int, start: datetime, end_exclusive: datetime
     ) -> list[tuple[datetime, float, float]]:
+        """List date, real and predicted values of visible cells in a period."""
         result = await self._session.execute(
             select(ModelEvaluationResult.prediction_date, ModelEvaluationResult.real_value, ModelEvaluationResult.predicted_value)
             .join(ModelEvaluation, ModelEvaluation.id == ModelEvaluationResult.model_evaluation_id)

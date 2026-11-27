@@ -10,12 +10,14 @@ class PasswordResetRepositoryImpl:
         self._session = session
 
     async def save(self, entry: PasswordReset) -> PasswordReset:
+        """Persist a password reset entry and return it refreshed."""
         self._session.add(entry)
         await self._session.commit()
         await self._session.refresh(entry)
         return entry
 
     async def find_by_user(self, user_id: int) -> PasswordReset | None:
+        """Find the latest password reset entry of a user."""
         result = await self._session.execute(
             select(PasswordReset)
             .where(PasswordReset.user_id == user_id)

@@ -54,6 +54,7 @@ def vmd_filter(x: np.ndarray, K: int, alpha: float, n_drop: int = config.VMD_N_D
 
 
 def _segments(blocked: np.ndarray) -> list[tuple[int, int]]:
+    """Return the runs of positions that are not blocked."""
     return true_runs(~np.asarray(blocked, dtype=bool))
 
 

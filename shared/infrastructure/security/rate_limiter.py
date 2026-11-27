@@ -21,6 +21,7 @@ def rate_limit(name: str, max_requests: int, window_seconds: int):
     """
 
     async def dependency(request: Request) -> None:
+        """Count the request of this client and reject it when over the limit."""
         redis = get_redis()
         if redis is None:
             return

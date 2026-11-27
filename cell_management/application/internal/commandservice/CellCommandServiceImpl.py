@@ -18,6 +18,7 @@ class CellCommandServiceImpl:
         self._component_repo = component_repository
 
     async def create_cell(self, command: CreateCellCommand) -> Cell:
+        """Create a cell, or bring back a hidden one with the same name."""
         name = Cell.normalize_name(command.name)
         existing = await self._repository.find_by_name(name)
         if existing:
@@ -29,6 +30,7 @@ class CellCommandServiceImpl:
         return await self._repository.save(Cell(name=name, is_active=False, is_visible=True))
 
     async def update_cell(self, command: UpdateCellCommand) -> Cell:
+        """Rename a cell and refresh its barcode from its active components."""
         cell = await self._get_or_raise(command.cell_id)
         name = Cell.normalize_name(command.name)
         if name != cell.name and await self._repository.exists_by_name(name):
@@ -55,6 +57,7 @@ class CellCommandServiceImpl:
         return await self._repository.save(cell)
 
     async def generate_barcode(self, command: GenerateCellBarcodeCommand) -> Cell:
+        """Generate the barcode of a cell that has a cathode and an anode."""
         cell = await self._get_or_raise(command.cell_id)
         components = await self._component_repo.find_all_components(cell_id=cell.id, is_active=True)
         assigned_types = {component.type for component in components}
@@ -64,6 +67,7 @@ class CellCommandServiceImpl:
         return await self._repository.save(cell)
 
     async def _get_or_raise(self, cell_id: int) -> Cell:
+        """Return the cell with this id or raise ValueError."""
         cell = await self._repository.find_by_id(cell_id)
         if not cell:
             raise ValueError(f"Cell not found: {cell_id}")

@@ -12,7 +12,9 @@ class CellQueryServiceImpl:
         self._repository = repository
 
     async def get_cell_by_id(self, query: GetCellByIdQuery) -> Cell | None:
+        """Return the cell with the requested id, if any."""
         return await self._repository.find_by_id(query.cell_id)
 
     async def get_all_cells(self, query: GetAllCellsQuery) -> list[Cell]:
+        """Return the cells, optionally filtered by active status."""
         return await self._repository.find_all(is_active=query.is_active)

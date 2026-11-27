@@ -25,6 +25,7 @@ class PasswordResetServiceImpl:
         self._notifier = notifier
 
     async def request_reset(self, command: RequestPasswordResetCommand) -> None:
+        """Email a password reset code if the account can authenticate."""
         user = await self._user_repo.find_by_email(command.email.lower().strip())
         if not user or not user.can_authenticate():
             # Do not reveal whether the email is registered
@@ -40,6 +41,7 @@ class PasswordResetServiceImpl:
         await send_verification_code(user.email, entry.code)
 
     async def confirm_reset(self, command: ConfirmPasswordResetCommand) -> None:
+        """Set a new password if the verification code is valid."""
         user = await self._user_repo.find_by_email(command.email.lower().strip())
         if not user or not user.can_authenticate():
             raise ValueError(INVALID_CODE_MESSAGE)

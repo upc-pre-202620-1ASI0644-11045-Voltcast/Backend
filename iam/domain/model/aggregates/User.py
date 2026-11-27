@@ -52,6 +52,7 @@ class User(Base):
 
     @staticmethod
     def validate_password_policy(plain_password: str) -> None:
+        """Raise ValueError if the password does not meet the policy."""
         errors = []
         if len(plain_password) < 8:
             errors.append("at least 8 characters")
@@ -68,13 +69,16 @@ class User(Base):
 
     @staticmethod
     def hash_password(plain_password: str) -> str:
+        """Validate a password and return its bcrypt hash."""
         User.validate_password_policy(plain_password)
         return bcrypt.hashpw(plain_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
     def verify_password(self, plain_password: str) -> bool:
+        """Tell whether the password matches the stored hash."""
         return bcrypt.checkpw(plain_password.encode("utf-8"), self.hashed_password.encode("utf-8"))
 
     def reset_password(self, new_password: str) -> None:
+        """Replace the password hash with that of a new password."""
         self.hashed_password = self.hash_password(new_password)
 
     # =========================================================================
@@ -82,12 +86,14 @@ class User(Base):
     # =========================================================================
 
     def approve(self, role: Role) -> None:
+        """Activate a pending request with the given role."""
         if self.status != UserStatus.PENDING:
             raise ValueError("Only pending requests can be approved")
         self.role = role
         self.status = UserStatus.ACTIVE
 
     def reject(self) -> None:
+        """Reject a pending request."""
         if self.status != UserStatus.PENDING:
             raise ValueError("Only pending requests can be rejected")
         self.status = UserStatus.REJECTED
@@ -101,16 +107,19 @@ class User(Base):
         self.status = UserStatus.PENDING
 
     def disable(self) -> None:
+        """Disable an active account."""
         if self.status != UserStatus.ACTIVE:
             raise ValueError("Only active accounts can be disabled")
         self.status = UserStatus.DISABLED
 
     def enable(self) -> None:
+        """Re-enable a disabled account."""
         if self.status != UserStatus.DISABLED:
             raise ValueError("Only disabled accounts can be enabled")
         self.status = UserStatus.ACTIVE
 
     def update_profile(self, full_name: str | None = None, email: str | None = None) -> None:
+        """Change the full name and/or email of the user."""
         if full_name is not None:
             self.full_name = full_name
         if email is not None:
@@ -121,10 +130,13 @@ class User(Base):
     # =========================================================================
 
     def can_authenticate(self) -> bool:
+        """Tell whether the account is allowed to sign in."""
         return self.status == UserStatus.ACTIVE
 
     def is_admin(self) -> bool:
+        """Tell whether the user has the admin role."""
         return self.role is not None and self.role.name == ROLE_ADMIN
 
     def is_engineer(self) -> bool:
+        """Tell whether the user has the engineer role."""
         return self.role is not None and self.role.name == ROLE_USER

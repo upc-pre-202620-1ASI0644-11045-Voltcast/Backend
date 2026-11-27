@@ -23,6 +23,7 @@ class ComponentCommandServiceImpl:
         self._cell_repo = cell_repository
 
     async def create_component(self, command: CreateComponentCommand) -> Component:
+        """Create a component, reviving a disabled or hidden one with the same serial code."""
         existing = await self._component_repo.find_by_serial_code(command.serial_code)
         if existing and existing.is_active and existing.is_visible:
             raise ValueError(f"Component with serial code '{command.serial_code}' already exists")
@@ -45,6 +46,7 @@ class ComponentCommandServiceImpl:
         return saved
 
     async def update_component(self, command: UpdateComponentCommand) -> Component:
+        """Change the serial code or type of a component and refresh its cell."""
         component = await self._get_or_raise(command.component_id)
         if (
             command.serial_code is not None
@@ -59,21 +61,25 @@ class ComponentCommandServiceImpl:
         return saved
 
     async def disable_component(self, command: DisableComponentCommand) -> Component:
+        """Disable a component that is not assigned to a cell."""
         component = await self._get_or_raise(command.component_id)
         component.disable()
         return await self._component_repo.save_component(component)
 
     async def reactivate_component(self, command: ReactivateComponentCommand) -> Component:
+        """Reactivate a disabled component."""
         component = await self._get_or_raise(command.component_id)
         component.reactivate()
         return await self._component_repo.save_component(component)
 
     async def hide_component(self, command: HideComponentCommand) -> Component:
+        """Remove a component from view."""
         component = await self._get_or_raise(command.component_id)
         component.hide()
         return await self._component_repo.save_component(component)
 
     async def assign_component(self, command: AssignComponentCommand) -> Component:
+        """Assign a component to a cell and refresh both affected cells."""
         component = await self._get_or_raise(command.component_id)
         await self._get_visible_cell_or_raise(command.cell_id)
         previous_cell_id = component.cell_id
@@ -83,6 +89,7 @@ class ComponentCommandServiceImpl:
         return saved
 
     async def swap_components(self, command: SwapComponentsCommand) -> tuple[Component, Component]:
+        """Swap the cells of two components of the same type."""
         comp_a = await self._get_or_raise(command.component_a_id)
         comp_b = await self._get_or_raise(command.component_b_id)
 
@@ -120,6 +127,7 @@ class ComponentCommandServiceImpl:
         return cell
 
     async def _get_or_raise(self, component_id: int) -> Component:
+        """Return the component with this id or raise ValueError."""
         component = await self._component_repo.find_component_by_id(component_id)
         if not component:
             raise ValueError(f"Component not found: {component_id}")

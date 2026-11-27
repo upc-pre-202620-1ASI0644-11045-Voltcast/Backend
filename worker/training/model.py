@@ -28,6 +28,7 @@ class VoltCastNet(nn.Module):
         )
 
     def forward(self, x: Tensor, cell: Tensor, el_flag: Tensor) -> Tensor:
+        """Predict from each input series, its cell and its electrolyzer flag."""
         _, (h_n, _) = self.encoder(x)
         z = torch.cat([h_n[-2], h_n[-1], self.emb(cell), el_flag.unsqueeze(-1)], dim=-1)
         return self.head(z)
@@ -37,10 +38,12 @@ MODEL_KWARGS = ["hidden", "layers", "emb_dim", "head_hidden", "dropout"]
 
 
 def build_model(n_cells: int, n_features: int, cfg: dict) -> VoltCastNet:
+    """Create the network from a configuration."""
     return VoltCastNet(n_cells, n_features, **{k: cfg[k] for k in MODEL_KWARGS})
 
 
 def masked_mse(pred: Tensor, y: Tensor, mask: Tensor) -> Tensor:
+    """Mean squared error over the positions selected by the mask."""
     m = mask.float()
     return ((pred - y) ** 2 * m).sum() / m.sum().clamp(min=1.0)
 

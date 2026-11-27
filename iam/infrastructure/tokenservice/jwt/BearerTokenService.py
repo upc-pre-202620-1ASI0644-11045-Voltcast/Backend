@@ -12,6 +12,7 @@ security = HTTPBearer()
 
 
 def _unauthorized(detail: str) -> HTTPException:
+    """Build a 401 error that asks for a Bearer token."""
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail=detail,

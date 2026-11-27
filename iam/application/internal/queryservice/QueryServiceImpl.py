@@ -10,7 +10,9 @@ class QueryServiceImpl:
         self._repository = repository
 
     async def get_user_by_id(self, query: GetUserByIdQuery) -> User | None:
+        """Return the user with the requested id, if any."""
         return await self._repository.find_by_id(query.user_id)
 
     async def get_all_users(self, query: GetAllUsersQuery) -> list[User]:
+        """Return the users, optionally filtered by status."""
         return await self._repository.find_all(status=query.status)

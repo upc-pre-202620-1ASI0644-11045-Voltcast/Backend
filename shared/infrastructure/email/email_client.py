@@ -13,6 +13,7 @@ SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER)
 
 
 async def send_email(to: str, subject: str, body_html: str) -> None:
+    """Send an HTML email through SMTP."""
     msg = EmailMessage()
     msg["From"] = SMTP_FROM
     msg["To"] = to
@@ -30,6 +31,7 @@ async def send_email(to: str, subject: str, body_html: str) -> None:
 
 
 async def send_password_changed_notification(to: str, full_name: str | None) -> None:
+    """Email a user that their password was changed."""
     name = full_name or "Usuario"
     body = f"""
     <p>Hola {name},</p>
@@ -52,6 +54,7 @@ async def send_new_registration_request_notification(to: str, requests: list[tup
 
 
 async def send_account_accepted_notification(to: str, full_name: str | None) -> None:
+    """Email a user that their access request was accepted."""
     name = full_name or "Usuario"
     body = f"""
     <p>Hola {name},</p>
@@ -61,6 +64,7 @@ async def send_account_accepted_notification(to: str, full_name: str | None) -> 
 
 
 async def send_account_rejected_notification(to: str, full_name: str | None) -> None:
+    """Email a user that their access request was rejected."""
     name = full_name or "Usuario"
     body = f"""
     <p>Hola {name},</p>
@@ -70,6 +74,7 @@ async def send_account_rejected_notification(to: str, full_name: str | None) -> 
 
 
 def _threshold(limit: float | None) -> str:
+    """Describe the voltage limit in Spanish for an email."""
     return f"el umbral de {limit:.2f} V" if limit is not None else "el umbral"
 
 
@@ -107,6 +112,7 @@ async def send_near_date_notification(
 
 
 async def send_verification_code(to: str, code: str) -> None:
+    """Email the password reset verification code."""
     body = f"""
     <p>Tu código de verificación es:</p>
     <p style="font-size:24px;letter-spacing:4px"><b>{code}</b></p>
