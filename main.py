@@ -1,11 +1,13 @@
+import asyncio
 import logging
 import os
 import re
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from sqlalchemy import select
+from fastapi.responses import JSONResponse
+from sqlalchemy import select, text
 
-from shared.infrastructure.cache.redis_client import close_redis
+from shared.infrastructure.cache.redis_client import close_redis, get_redis
 from shared.infrastructure.persistence.configuration.database_configuration import init_db, close_db, AsyncSessionLocal, engine
 from iam.domain.model.aggregates.Role import Role, ROLE_ADMIN, ROLE_USER
 from iam.domain.model.aggregates.User import User, UserStatus
@@ -41,6 +43,7 @@ class HideOAuthParams(logging.Filter):
 logging.getLogger("uvicorn.access").addFilter(HideOAuthParams())
 
 ROLES_SEED = [ROLE_ADMIN, ROLE_USER]  # Supervisor, Ingeniero de Planta
+HEALTH_TIMEOUT_SECONDS = 3
 
 
 async def seed_roles():
@@ -124,3 +127,39 @@ app.include_router(drive_router)
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
+
+
+async def _ping_database() -> None:
+    async with engine.connect() as connection:
+        await connection.execute(text("SELECT 1"))
+
+
+async def _responds(name: str, probe) -> bool:
+    """Run a probe with a short timeout. The error goes only to the log, since it may name hosts."""
+    try:
+        await asyncio.wait_for(probe(), HEALTH_TIMEOUT_SECONDS)
+        return True
+    except Exception:
+        logger.warning("Health check: %s is not responding", name, exc_info=True)
+        return False
+
+
+async def _redis_status() -> str:
+    if not os.getenv("REDIS_URL"):
+        return "not_configured"
+    return "ok" if await _responds("redis", lambda: get_redis().ping()) else "degraded"
+
+
+# HEAD too: uptime monitors use it, and a GET-only route answers it with 405.
+@app.api_route("/health", methods=["GET", "HEAD"], include_in_schema=False)
+async def health():
+    """503 only when MySQL fails: the API keeps working without Redis."""
+    database_ok, redis = await asyncio.gather(_responds("database", _ping_database), _redis_status())
+    return JSONResponse(
+        status_code=200 if database_ok else 503,
+        content={
+            "status": "ok" if database_ok else "down",
+            "database": "ok" if database_ok else "error",
+            "redis": redis,
+        },
+    )
