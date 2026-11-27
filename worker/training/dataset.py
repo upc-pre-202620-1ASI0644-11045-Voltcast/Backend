@@ -57,6 +57,7 @@ class SeriesTensors:
 
     def __init__(self, p, sigma: float, lookback: int = config.LOOKBACK_DAYS, horizon: int = config.HORIZON_DAYS):
         def t(frame, dtype=torch.float32):
+            """Convert a table to a tensor."""
             return torch.tensor(frame.to_numpy(dtype=float), dtype=dtype)
 
         self.cells, self.sigma, self.L, self.H, self.device = p.cells, sigma, lookback, horizon, "cpu"

@@ -10,15 +10,18 @@ class DatasetRepositoryImpl:
         self._session = session
 
     async def save(self, dataset: UploadedDataset) -> UploadedDataset:
+        """Persist a dataset and return it refreshed."""
         self._session.add(dataset)
         await self._session.commit()
         await self._session.refresh(dataset)
         return dataset
 
     async def find_by_id(self, dataset_id: int) -> UploadedDataset | None:
+        """Find a dataset by its id."""
         result = await self._session.execute(select(UploadedDataset).where(UploadedDataset.id == dataset_id))
         return result.scalar_one_or_none()
 
     async def find_all(self) -> list[UploadedDataset]:
+        """List all datasets, newest first."""
         result = await self._session.execute(select(UploadedDataset).order_by(UploadedDataset.id.desc()))
         return list(result.scalars().all())

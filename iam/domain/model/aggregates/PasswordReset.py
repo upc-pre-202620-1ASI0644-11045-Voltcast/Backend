@@ -28,6 +28,7 @@ class PasswordReset(Base):
 
     @classmethod
     def issue_for(cls, user_id: int) -> "PasswordReset":
+        """Create a password reset entry with a new code for a user."""
         entry = cls(user_id=user_id)
         entry.renew()
         return entry
@@ -39,10 +40,13 @@ class PasswordReset(Base):
         self.expires_at = utc_now_naive() + timedelta(minutes=RESET_CODE_EXPIRY_MINUTES)
 
     def mark_used(self) -> None:
+        """Mark the code as already used."""
         self.used = True
 
     def is_expired(self) -> bool:
+        """Tell whether the code has expired."""
         return utc_now_naive() > self.expires_at
 
     def is_valid(self, code: str) -> bool:
+        """Tell whether the code matches and is neither used nor expired."""
         return not self.used and not self.is_expired() and secrets.compare_digest(self.code, code)

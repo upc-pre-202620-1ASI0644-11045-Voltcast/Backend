@@ -54,6 +54,7 @@ def _forecast(model, p: Prepared, ka: pd.DataFrame, vc: pd.DataFrame, sigma: flo
         sl = slice(t0 - L + 1, t0 + 1)
 
         def window(frame: pd.DataFrame, dtype=torch.float32):
+            """Convert the selected window of a table to a cell by time tensor."""
             return torch.as_tensor(frame.iloc[sl, rows].to_numpy(dtype=float, copy=True).T, dtype=dtype)
 
         x, anc = build_inputs(torch.as_tensor(vf_win[rows], dtype=torch.float32), window(p.valid, torch.bool),
@@ -84,6 +85,7 @@ def _compare(p: Prepared, forecasts, origins: list[int]) -> tuple[np.ndarray, np
 
 
 def _metrics(predicted: np.ndarray, real: np.ndarray) -> dict:
+    """Compute RMSE, MAE, MAPE and R2 of the predictions."""
     err = predicted - real
     return {
         "rmse": float(np.sqrt(np.mean(err ** 2))),

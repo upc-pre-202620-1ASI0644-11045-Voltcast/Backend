@@ -22,6 +22,7 @@ router = APIRouter(prefix="/api/v1/users", tags=["User Management"])
 
 
 def _handle_error(error: Exception) -> HTTPException:
+    """Translate an application error into an HTTP error."""
     if isinstance(error, EntityNotFoundException):
         return HTTPException(status_code=404, detail=error.message)
     if isinstance(error, ValueError):
@@ -35,6 +36,7 @@ async def list_users(
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """List the users, optionally filtered by account status."""
     try:
         service = QueryServiceImpl(UserRepositoryImpl(db))
         users = await service.get_all_users(AuthResourceAssembler.to_get_all_query(status))
@@ -49,6 +51,7 @@ async def get_user(
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Return one user by its id."""
     try:
         service = QueryServiceImpl(UserRepositoryImpl(db))
         user = await service.get_user_by_id(AuthResourceAssembler.to_get_by_id_query(user_id))
@@ -66,6 +69,7 @@ async def review_registration(
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Approve or reject an access request."""
     try:
         service = CommandServiceImpl(UserRepositoryImpl(db), notifier_for(db))
         user = await service.review_registration(AuthResourceAssembler.to_review_command(user_id, request))
@@ -81,6 +85,7 @@ async def update_user(
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Edit an engineer account."""
     try:
         service = CommandServiceImpl(UserRepositoryImpl(db), notifier_for(db))
         user = await service.update_user(AuthResourceAssembler.to_update_user_command(user_id, request))
@@ -96,6 +101,7 @@ async def change_user_status(
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Disable or re-enable an engineer account."""
     try:
         service = CommandServiceImpl(UserRepositoryImpl(db), notifier_for(db))
         user = await service.change_user_status(AuthResourceAssembler.to_change_status_command(user_id, request))

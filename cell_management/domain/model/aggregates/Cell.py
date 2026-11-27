@@ -39,9 +39,11 @@ class Cell(Base):
         self.is_active = {int(ComponentType.CATHODE), int(ComponentType.ANODE)} <= assigned_types
 
     def hide(self) -> None:
+        """Remove the cell from view."""
         self.is_visible = False
 
     def show(self) -> None:
+        """Make a hidden cell visible again."""
         self.is_visible = True
 
     def generate_barcode(self, components: list[Component]) -> None:
@@ -63,4 +65,5 @@ class Cell(Base):
             self.barcode_value = None
 
     def update_info(self, name: str) -> None:
+        """Change the name of the cell."""
         self.name = name

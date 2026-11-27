@@ -50,5 +50,6 @@ class TrainingExecution(Base):
     )
 
     def mark_failed(self) -> None:
+        """Mark the training as failed and record when it finished."""
         self.status = TrainingStatus.FAILED
         self.finished_at = datetime.now(timezone.utc).replace(tzinfo=None)

@@ -82,6 +82,7 @@ class JWTService:
         return int(payload["sub"])
 
     def get_role_from_token(self, token: str) -> str:
+        """Return the role stored in a token, USER by default."""
         payload = self.decode_token(token)
         return payload.get("role", "USER")
 

@@ -41,6 +41,7 @@ class NotificationChannel(str, Enum):
 
 
 def _values(enum) -> list[str]:
+    """Return the values of an enum's members."""
     return [member.value for member in enum]
 
 

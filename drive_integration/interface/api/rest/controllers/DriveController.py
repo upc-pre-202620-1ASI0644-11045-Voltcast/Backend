@@ -34,9 +34,11 @@ async def callback(code: str | None = Query(None), state: str | None = Query(Non
 
 @router.get("/status", response_model=DriveStatusResponse, summary="State of the Drive connection")
 async def status(_: User = Depends(get_current_active_user), db: AsyncSession = Depends(get_db_session)):
+    """Return the state of the Drive connection."""
     return await DriveServiceImpl(db).status()
 
 
 @router.delete("", status_code=204, summary="Disconnect Drive and delete its tokens")
 async def disconnect(_: User = Depends(require_admin), db: AsyncSession = Depends(get_db_session)):
+    """Disconnect Drive and delete its tokens."""
     await DriveServiceImpl(db).disconnect()

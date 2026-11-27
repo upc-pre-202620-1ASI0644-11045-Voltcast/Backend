@@ -44,6 +44,7 @@ async def process_drive_sync() -> None:
 
 
 async def sync_drive(session, storage, queue) -> None:
+    """Collect new Drive files, create a dataset when due and record the result."""
     connection = await session.get(DriveConnection, 1)
     if connection is None or connection.error == ERROR_INVALID_GRANT:
         return  # nothing to sync, or the account has to be connected again: no retries in a loop
@@ -68,6 +69,7 @@ async def sync_drive(session, storage, queue) -> None:
 
 
 async def _access_token(session, connection) -> str:
+    """Refresh the Drive access token, storing a new refresh token if one is sent."""
     tokens = await gdrive.refresh(token_cipher.decrypt(connection.refresh_token))
     if tokens.get("refresh_token"):  # Google keeps it, but if it sends another one that is the valid one
         connection.refresh_token = token_cipher.encrypt(tokens["refresh_token"])
@@ -112,6 +114,7 @@ async def _look_at(session, storage, access_token: str, item: dict) -> DriveFile
 
 
 async def _collect(session, storage, access_token: str) -> None:
+    """Download and check the new files of the Drive folder, and recheck held ones."""
     items = await gdrive.list_folder(access_token, gdrive.folder_id())
     if items is None:  # a wrong or deleted folder is not "nothing new": it must show as a failure, not as a healthy sync
         raise RuntimeError("The Drive folder does not exist, is in the trash or is not shared with the connected account")
@@ -151,6 +154,7 @@ async def _collect(session, storage, access_token: str) -> None:
 
 
 async def _create_dataset_if_due(session, storage, queue) -> None:
+    """Create a dataset from the pending files once there are enough new days."""
     pending = (await session.execute(
         select(DriveFile).where(DriveFile.status == FILE_PENDING).order_by(DriveFile.date_from, DriveFile.id)
     )).scalars().all()

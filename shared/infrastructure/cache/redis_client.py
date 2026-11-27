@@ -26,6 +26,7 @@ def get_redis() -> Redis | None:
 
 
 async def close_redis() -> None:
+    """Close the Redis client if it is open."""
     global _client
     if _client is not None:
         await _client.aclose()

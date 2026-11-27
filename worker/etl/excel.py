@@ -30,11 +30,13 @@ class SheetSchema:
 
 
 def section_of(sheet_name: str) -> str | None:
+    """Return the section code found in a sheet name, if any."""
     match = SECTION_PATTERN.search(sheet_name)
     return match.group(1).upper() if match else None
 
 
 def _header_to_text(value) -> str:
+    """Convert a header cell value to clean text."""
     if value is None:
         return ""
     if isinstance(value, float) and value.is_integer():
@@ -102,6 +104,7 @@ def _workbook_sections(names: list[str], rows_of) -> dict[str, tuple[pd.DataFram
 
 
 def _xls_rows(sheet):
+    """Yield the rows of an .xls sheet with dates converted and blanks as None."""
     for r in range(sheet.nrows):
         row = []
         for cell in sheet.row(r):
@@ -115,6 +118,7 @@ def _xls_rows(sheet):
 
 
 def _read_xls(content: bytes):
+    """Read the sections of an .xls workbook, raising SchemaError if it is invalid."""
     try:
         book = xlrd.open_workbook(file_contents=content)
         # Corrupt files can fail while a sheet is read, so read them all inside the try.

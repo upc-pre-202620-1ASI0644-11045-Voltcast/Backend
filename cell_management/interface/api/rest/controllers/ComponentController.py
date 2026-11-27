@@ -33,6 +33,7 @@ async def list_components(
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """List the components, optionally filtered by type, cell and status."""
     try:
         repository = ComponentRepositoryImpl(db)
         service = ComponentQueryServiceImpl(repository)
@@ -53,6 +54,7 @@ async def create_component(
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Create a new component."""
     try:
         component_repo = ComponentRepositoryImpl(db)
         cell_repo = CellRepositoryImpl(db)
@@ -76,6 +78,7 @@ async def swap_components(
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Swap two components between their cells."""
     try:
         component_repo = ComponentRepositoryImpl(db)
         cell_repo = CellRepositoryImpl(db)
@@ -99,6 +102,7 @@ async def get_component(
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Return one component by its id."""
     try:
         repository = ComponentRepositoryImpl(db)
         service = ComponentQueryServiceImpl(repository)
@@ -124,6 +128,7 @@ async def update_component(
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Update a component."""
     try:
         component_repo = ComponentRepositoryImpl(db)
         cell_repo = CellRepositoryImpl(db)
@@ -147,6 +152,7 @@ async def disable_component(
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Disable a component."""
     try:
         component_repo = ComponentRepositoryImpl(db)
         cell_repo = CellRepositoryImpl(db)
@@ -209,6 +215,7 @@ async def assign_component(
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Assign a component to a cell."""
     try:
         component_repo = ComponentRepositoryImpl(db)
         cell_repo = CellRepositoryImpl(db)

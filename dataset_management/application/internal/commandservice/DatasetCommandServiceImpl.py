@@ -64,5 +64,6 @@ class DatasetCommandServiceImpl:
         return dataset
 
     async def _ensure_no_training(self) -> None:
+        """Raise ValueError if a training is in progress."""
         if await self._training_in_progress():
             raise ValueError("A training is in progress; wait for it to finish before uploading a new file")

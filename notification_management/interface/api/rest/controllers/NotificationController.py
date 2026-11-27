@@ -24,6 +24,7 @@ router = APIRouter(prefix="/api/v1/notifications", tags=["Notification Managemen
 
 
 def _handle_error(error: Exception) -> HTTPException:
+    """Translate an application error into an HTTP error."""
     if isinstance(error, EntityNotFoundException):
         return HTTPException(status_code=404, detail=error.message)
     return HTTPException(status_code=500, detail=f"Internal error: {str(error)}")
@@ -36,6 +37,7 @@ async def list_notifications(
     user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """List my notifications, newest first."""
     try:
         return await NotificationQueryServiceImpl(NotificationRepositoryImpl(db)).get_inbox(user.id, status, limit)
     except Exception as e:
@@ -48,6 +50,7 @@ async def mark_read(
     user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Mark one of my notifications as read."""
     try:
         await notifier_for(db).mark_read(user.id, notification_id)
     except Exception as e:
@@ -73,6 +76,7 @@ async def unregister_device(
     user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Stop sending push notifications to one of my devices."""
     try:
         await notifier_for(db).unregister_device(user.id, device_id)
     except Exception as e:

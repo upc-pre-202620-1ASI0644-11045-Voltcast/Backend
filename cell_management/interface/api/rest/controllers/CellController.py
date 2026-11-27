@@ -24,6 +24,7 @@ async def list_cells(
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """List the cells, optionally filtered by active status."""
     try:
         repository = CellRepositoryImpl(db)
         service = CellQueryServiceImpl(repository)
@@ -40,6 +41,7 @@ async def get_cell(
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Return one cell by its id."""
     try:
         repository = CellRepositoryImpl(db)
         service = CellQueryServiceImpl(repository)
@@ -64,6 +66,7 @@ async def create_cell(
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Create a new cell."""
     try:
         repository = CellRepositoryImpl(db)
         service = CellCommandServiceImpl(repository, ComponentRepositoryImpl(db))
@@ -87,6 +90,7 @@ async def update_cell(
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Update the name of a cell."""
     try:
         repository = CellRepositoryImpl(db)
         service = CellCommandServiceImpl(repository, ComponentRepositoryImpl(db))
@@ -149,6 +153,7 @@ async def generate_cell_barcode(
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Generate the barcode of a cell."""
     try:
         repository = CellRepositoryImpl(db)
         service = CellCommandServiceImpl(repository, ComponentRepositoryImpl(db))

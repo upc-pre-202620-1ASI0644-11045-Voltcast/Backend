@@ -17,9 +17,11 @@ class LocalFileStorage:
         self._root = root
 
     async def save(self, path: str, content: bytes) -> str:
+        """Write a file under the local storage root and return its path."""
         target = self._root / path
 
         def write() -> None:
+            """Create the parent folders and write the bytes."""
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(content)
 
@@ -27,6 +29,7 @@ class LocalFileStorage:
         return path
 
     async def read(self, path: str) -> bytes:
+        """Read a file from local storage."""
         return await asyncio.to_thread((self._root / path).read_bytes)
 
 
@@ -38,11 +41,13 @@ class AzureBlobStorage:
         self._container = container
 
     async def save(self, path: str, content: bytes) -> str:
+        """Upload a file to Blob Storage, overwriting it, and return its path."""
         async with BlobServiceClient.from_connection_string(self._connection_string) as service:
             await service.get_blob_client(self._container, path).upload_blob(content, overwrite=True)
         return path
 
     async def read(self, path: str) -> bytes:
+        """Download a blob, raising FileNotFoundError if it does not exist."""
         async with BlobServiceClient.from_connection_string(self._connection_string) as service:
             try:
                 return await (await service.get_blob_client(self._container, path).download_blob()).readall()
@@ -51,6 +56,7 @@ class AzureBlobStorage:
 
 
 def get_file_storage() -> LocalFileStorage | AzureBlobStorage:
+    """Return Blob Storage if configured, otherwise local storage."""
     connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     if connection_string:
         return AzureBlobStorage(connection_string, os.getenv("AZURE_STORAGE_CONTAINER", "voltcast"))

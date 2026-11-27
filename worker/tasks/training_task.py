@@ -28,6 +28,7 @@ CHUNK = 5000
 
 
 async def _insert_all(session, table, rows: list[dict]) -> None:
+    """Insert rows into a table in chunks."""
     for i in range(0, len(rows), CHUNK):
         await session.execute(insert(table), rows[i:i + CHUNK])
 

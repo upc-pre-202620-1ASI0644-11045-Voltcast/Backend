@@ -72,23 +72,28 @@ class UploadedDataset(Base):
         return name
 
     def start_cleaning(self) -> None:
+        """Mark the dataset as being cleaned and clear any previous error."""
         self.upload_status = DatasetStatus.CLEANING
         self.error_message = None
 
     def await_confirmation(self) -> None:
+        """Mark the dataset as waiting for the user to confirm the merge."""
         self.upload_status = DatasetStatus.AWAITING_CONFIRMATION
 
     def confirm_merge(self) -> None:
+        """Accept the pending merge and set the dataset back to raw."""
         if self.upload_status != DatasetStatus.AWAITING_CONFIRMATION:
             raise ValueError(f"The dataset is not waiting for confirmation (status: {self.upload_status.value})")
         self.upload_status = DatasetStatus.RAW
 
     def mark_ready(self, processed_path: str, row_count: int, processed_row_count: int) -> None:
+        """Mark the dataset as processed, with its output path and row counts."""
         self.upload_status = DatasetStatus.READY
         self.processed_path = processed_path
         self.row_count = row_count
         self.processed_row_count = processed_row_count
 
     def mark_failed(self, message: str) -> None:
+        """Mark the dataset as failed with an error message."""
         self.upload_status = DatasetStatus.FAILED
         self.error_message = message

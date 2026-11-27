@@ -22,6 +22,7 @@ router = APIRouter(prefix="/api/v1/forecasts", tags=["Voltage Forecasting"])
 
 
 def _service(db: AsyncSession) -> ForecastQueryServiceImpl:
+    """Build the forecast query service bound to a database session."""
     return ForecastQueryServiceImpl(ForecastRepositoryImpl(db), TrainingRepositoryImpl(db), AlertRuleRepositoryImpl(db))
 
 
@@ -49,6 +50,7 @@ async def get_model_metrics(
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Return the accuracy metrics of the active model."""
     try:
         view = await _service(db).get_model_metrics(ForecastingResourceAssembler.to_metrics_query())
         return ForecastingResourceAssembler.to_metrics_response(view)

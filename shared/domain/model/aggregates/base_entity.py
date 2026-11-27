@@ -7,6 +7,7 @@ from shared.infrastructure.persistence.configuration.database_configuration impo
 
 
 def utc_now() -> datetime:
+    """Return the current time in UTC."""
     return datetime.now(timezone.utc)
 
 

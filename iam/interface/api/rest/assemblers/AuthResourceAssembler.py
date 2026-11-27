@@ -34,10 +34,12 @@ class AuthResourceAssembler:
 
     @staticmethod
     def to_sign_in_command(request: SignInRequest) -> SignInCommand:
+        """Build the sign-in command from the request."""
         return SignInCommand(email=request.email, password=request.password)
 
     @staticmethod
     def to_register_command(request: RegisterRequest) -> RegisterUserCommand:
+        """Build the registration command from the request."""
         return RegisterUserCommand(
             full_name=request.full_name,
             email=request.email,
@@ -46,10 +48,12 @@ class AuthResourceAssembler:
 
     @staticmethod
     def to_request_reset_command(request: RequestPasswordResetRequest) -> RequestPasswordResetCommand:
+        """Build the password reset request command."""
         return RequestPasswordResetCommand(email=request.email)
 
     @staticmethod
     def to_confirm_reset_command(request: ConfirmPasswordResetRequest) -> ConfirmPasswordResetCommand:
+        """Build the password reset confirmation command."""
         return ConfirmPasswordResetCommand(
             email=request.email,
             code=request.code,
@@ -58,6 +62,7 @@ class AuthResourceAssembler:
 
     @staticmethod
     def to_review_command(user_id: int, request: ReviewRegistrationRequest) -> ReviewRegistrationCommand:
+        """Build the command that approves or rejects a request."""
         return ReviewRegistrationCommand(
             user_id=user_id,
             approve=request.decision == "approve",
@@ -66,24 +71,29 @@ class AuthResourceAssembler:
 
     @staticmethod
     def to_update_user_command(user_id: int, request: UpdateUserRequest) -> UpdateUserCommand:
+        """Build the update-user command from the request."""
         return UpdateUserCommand(user_id=user_id, full_name=request.full_name, email=request.email)
 
     @staticmethod
     def to_change_status_command(user_id: int, request: ChangeUserStatusRequest) -> ChangeUserStatusCommand:
+        """Build the command that enables or disables an account."""
         return ChangeUserStatusCommand(user_id=user_id, enable=request.status == "active")
 
     @staticmethod
     def to_get_by_id_query(user_id: int) -> GetUserByIdQuery:
+        """Build the query for one user."""
         return GetUserByIdQuery(user_id=user_id)
 
     @staticmethod
     def to_get_all_query(status: UserStatus | None = None) -> GetAllUsersQuery:
+        """Build the query for the list of users."""
         return GetAllUsersQuery(status=status)
 
     # ── Domain → Response ────────────────────────────────────────────────────
 
     @staticmethod
     def to_user_response(user: User) -> UserResponse:
+        """Map a user to its API response."""
         return UserResponse(
             id=user.id,
             email=user.email,
@@ -95,6 +105,7 @@ class AuthResourceAssembler:
 
     @staticmethod
     def to_authentication_response(auth: AuthenticationResponse) -> AuthResponseDTO:
+        """Map an authentication result to its API response."""
         return AuthResponseDTO(
             user=AuthResourceAssembler.to_user_response(auth.user),
             access_token=auth.access_token,

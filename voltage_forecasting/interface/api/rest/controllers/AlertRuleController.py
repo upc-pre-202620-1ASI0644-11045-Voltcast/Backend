@@ -19,6 +19,7 @@ async def list_alert_rules(
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """List the allowed voltage limits in force."""
     try:
         service = AlertRuleQueryServiceImpl(AlertRuleRepositoryImpl(db))
         rules = await service.get_alert_rules(ForecastingResourceAssembler.to_alert_rules_query())

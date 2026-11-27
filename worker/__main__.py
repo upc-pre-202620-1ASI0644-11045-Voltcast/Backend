@@ -8,6 +8,7 @@ from worker.main import SCHEDULED, TASKS, run
 
 
 async def main(task: str) -> None:
+    """Run a worker task and close the database afterwards."""
     try:
         await run(task)
     finally:

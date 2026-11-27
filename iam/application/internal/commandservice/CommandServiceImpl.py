@@ -42,6 +42,7 @@ class CommandServiceImpl:
     # =========================================================================
 
     async def sign_in(self, command: SignInCommand) -> AuthenticationResponse:
+        """Check the credentials and return the user with new tokens."""
         user = await self._repository.find_by_email(command.email.lower().strip())
         if not user or not user.verify_password(command.password):
             raise ValueError("Invalid credentials")
@@ -55,6 +56,7 @@ class CommandServiceImpl:
         )
 
     async def refresh_access_token(self, refresh_token: str) -> str:
+        """Issue a new access token from a valid refresh token."""
         try:
             user_id = jwt_service.get_user_id_from_token(refresh_token, expected_type="refresh")
         except ValueError:
@@ -70,6 +72,7 @@ class CommandServiceImpl:
     # =========================================================================
 
     async def register(self, command: RegisterUserCommand) -> User:
+        """Register an access request and notify the supervisors."""
         email = command.email.lower().strip()
         hashed_password = User.hash_password(command.password)
         full_name = command.full_name.strip()
@@ -97,6 +100,7 @@ class CommandServiceImpl:
     # =========================================================================
 
     async def review_registration(self, command: ReviewRegistrationCommand) -> User:
+        """Approve or reject a pending request and notify the user."""
         user = await self._get_or_raise(command.user_id)
         if command.approve:
             role = await self._repository.find_role_by_name(command.role_name or ROLE_USER)
@@ -110,6 +114,7 @@ class CommandServiceImpl:
         return user
 
     async def update_user(self, command: UpdateUserCommand) -> User:
+        """Edit the name or email of a manageable account."""
         user = await self._get_manageable_or_raise(command.user_id)
         email = command.email.lower().strip() if command.email else None
         if email and email != user.email and await self._repository.exists_by_email(email):
@@ -119,6 +124,7 @@ class CommandServiceImpl:
         return await self._repository.save(user)
 
     async def change_user_status(self, command: ChangeUserStatusCommand) -> User:
+        """Enable or disable a manageable account."""
         user = await self._get_manageable_or_raise(command.user_id)
         if command.enable:
             user.enable()
@@ -132,9 +138,11 @@ class CommandServiceImpl:
 
     @staticmethod
     def _create_access_token(user: User) -> str:
+        """Create an access token for the user."""
         return jwt_service.create_access_token(user_id=user.id, email=user.email, role=user.role.name)
 
     async def _get_or_raise(self, user_id: int) -> User:
+        """Return the user with this id or raise EntityNotFoundException."""
         user = await self._repository.find_by_id(user_id)
         if not user:
             raise EntityNotFoundException("User", user_id)

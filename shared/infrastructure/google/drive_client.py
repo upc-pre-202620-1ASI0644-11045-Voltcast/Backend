@@ -20,6 +20,7 @@ class InvalidGrant(Exception):
 
 
 def _setting(name: str) -> str:
+    """Return a required setting or raise NotConfigured."""
     value = os.getenv(name, "")
     if not value:
         raise NotConfigured(f"{name} is not set")
@@ -27,6 +28,7 @@ def _setting(name: str) -> str:
 
 
 def _redirect_uri() -> str:
+    """Return the OAuth redirect URI, requiring HTTPS outside localhost."""
     uri = _setting("GOOGLE_REDIRECT_URI")
     parsed = urlparse(uri)
     if parsed.scheme != "https" and not (parsed.scheme == "http" and parsed.hostname in ("localhost", "127.0.0.1")):
@@ -35,6 +37,7 @@ def _redirect_uri() -> str:
 
 
 def authorization_url(state: str) -> str:
+    """Build the Google consent URL for the given state."""
     # prompt=consent makes Google return a refresh token every time, also when the account had already accepted.
     query = urlencode({
         "client_id": _setting("GOOGLE_CLIENT_ID"), "redirect_uri": _redirect_uri(), "response_type": "code",
@@ -44,6 +47,7 @@ def authorization_url(state: str) -> str:
 
 
 async def _token(data: dict) -> dict:
+    """Request tokens from Google, raising InvalidGrant if the grant is no longer valid."""
     body = {"client_id": _setting("GOOGLE_CLIENT_ID"), "client_secret": _setting("GOOGLE_CLIENT_SECRET"), **data}
     async with aiohttp.ClientSession(timeout=TIMEOUT) as session:
         async with session.post(TOKEN_URL, data=body) as response:
@@ -54,6 +58,7 @@ async def _token(data: dict) -> dict:
 
 
 async def exchange_code(code: str) -> dict:
+    """Exchange an authorization code for tokens."""
     return await _token({"grant_type": "authorization_code", "code": code, "redirect_uri": _redirect_uri()})
 
 
@@ -63,10 +68,12 @@ async def refresh(refresh_token: str) -> dict:
 
 
 async def _get(session: aiohttp.ClientSession, path: str, access_token: str, **params) -> aiohttp.ClientResponse:
+    """Send an authenticated GET request to the Drive API."""
     return await session.get(f"{API_URL}/{path}", params=params, headers={"Authorization": f"Bearer {access_token}"})
 
 
 async def account_email(access_token: str) -> str:
+    """Return the email of the connected Google account."""
     async with aiohttp.ClientSession(timeout=TIMEOUT) as session:
         async with await _get(session, "about", access_token, fields="user(emailAddress)") as response:
             response.raise_for_status()
@@ -113,6 +120,7 @@ async def list_folder(access_token: str, folder: str) -> list[dict] | None:
 
 
 async def download(access_token: str, item_id: str) -> bytes:
+    """Download the content of a Drive file."""
     async with aiohttp.ClientSession(timeout=TIMEOUT) as session:
         async with await _get(session, f"files/{item_id}", access_token, alt="media") as response:
             response.raise_for_status()

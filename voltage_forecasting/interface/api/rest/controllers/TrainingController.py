@@ -20,6 +20,7 @@ async def list_trainings(
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """List the training runs."""
     try:
         service = TrainingQueryServiceImpl(TrainingRepositoryImpl(db))
         trainings = await service.get_all_trainings(ForecastingResourceAssembler.to_all_trainings_query())
@@ -34,6 +35,7 @@ async def get_training(
     _: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Return one training run by its id."""
     try:
         service = TrainingQueryServiceImpl(TrainingRepositoryImpl(db))
         training = await service.get_training_by_id(ForecastingResourceAssembler.to_training_by_id_query(training_id))

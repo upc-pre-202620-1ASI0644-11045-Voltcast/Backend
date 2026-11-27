@@ -8,4 +8,5 @@ from notification_management.infrastructure.persistence.repositories.Notificatio
 
 
 def notifier_for(db: AsyncSession) -> NotificationServiceImpl:
+    """Build the notification service bound to a database session."""
     return NotificationServiceImpl(NotificationRepositoryImpl(db), UserRepositoryImpl(db))

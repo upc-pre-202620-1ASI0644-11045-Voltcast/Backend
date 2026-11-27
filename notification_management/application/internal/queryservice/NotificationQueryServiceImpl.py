@@ -24,6 +24,7 @@ class NotificationQueryServiceImpl:
         self._repository = repository
 
     async def get_inbox(self, user_id: int, status: NotificationStatus | None, limit: int) -> list[InboxItem]:
+        """Return the notifications of a user with their readable text."""
         items = []
         for notification, prediction, cell in await self._repository.find_inbox(user_id, status, limit):
             code = notification.notification_type.type

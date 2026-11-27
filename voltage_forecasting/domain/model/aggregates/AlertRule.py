@@ -31,5 +31,6 @@ class AlertRule(Base):
 
     @staticmethod
     def validate_max_voltage(max_voltage: float) -> None:
+        """Raise ValueError if the maximum voltage is outside the allowed range."""
         if not MIN_MAX_VOLTAGE <= max_voltage <= MAX_MAX_VOLTAGE:
             raise ValueError(f"Maximum voltage must be between {MIN_MAX_VOLTAGE} V and {MAX_MAX_VOLTAGE} V")

@@ -11,6 +11,7 @@ class TrainingRepositoryImpl:
         self._session = session
 
     async def create_training(self, model: MlModel, execution: TrainingExecution) -> TrainingExecution:
+        """Persist a new model and its training run in one transaction."""
         self._session.add(model)
         await self._session.flush()
         execution.model_id = model.id
@@ -20,20 +21,24 @@ class TrainingRepositoryImpl:
         return execution
 
     async def save(self, execution: TrainingExecution) -> TrainingExecution:
+        """Persist a training run and return it refreshed."""
         self._session.add(execution)
         await self._session.commit()
         await self._session.refresh(execution)
         return execution
 
     async def find_by_id(self, training_id: int) -> TrainingExecution | None:
+        """Find a training run by its id."""
         result = await self._session.execute(select(TrainingExecution).where(TrainingExecution.id == training_id))
         return result.scalar_one_or_none()
 
     async def find_all(self) -> list[TrainingExecution]:
+        """List all training runs, newest first."""
         result = await self._session.execute(select(TrainingExecution).order_by(TrainingExecution.id.desc()))
         return list(result.scalars().all())
 
     async def exists_running(self) -> bool:
+        """Tell whether a training is running."""
         result = await self._session.execute(
             select(TrainingExecution.id).where(TrainingExecution.status == TrainingStatus.RUNNING).limit(1)
         )

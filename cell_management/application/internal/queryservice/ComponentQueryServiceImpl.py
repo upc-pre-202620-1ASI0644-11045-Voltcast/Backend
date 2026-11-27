@@ -12,9 +12,11 @@ class ComponentQueryServiceImpl:
         self._repository = repository
 
     async def get_component_by_id(self, query: GetComponentByIdQuery) -> Component | None:
+        """Return the component with the requested id, if any."""
         return await self._repository.find_component_by_id(query.component_id)
 
     async def get_all_components(self, query: GetAllComponentsQuery) -> list[Component]:
+        """Return the components that match the query filters."""
         return await self._repository.find_all_components(
             component_type=query.component_type,
             cell_id=query.cell_id,

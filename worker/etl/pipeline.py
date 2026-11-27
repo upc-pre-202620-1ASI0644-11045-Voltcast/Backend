@@ -48,6 +48,7 @@ def build_silver(sections: dict[str, tuple[pd.DataFrame, SheetSchema]]) -> Silve
 
 
 def raw_row_count(sections: dict[str, tuple[pd.DataFrame, SheetSchema]]) -> int:
+    """Count the data rows of all sections."""
     return sum(len(df) for df, _ in sections.values())
 
 
@@ -72,6 +73,7 @@ def cleaning_counts(sections: Sections) -> dict:
 
 
 def date_range(sections: Sections) -> tuple[date, date]:
+    """Return the first and last dates found in the sections."""
     dates = pd.concat([df[DATE_COL].dt.normalize() for df, _ in sections.values()])
     return dates.min().date(), dates.max().date()
 

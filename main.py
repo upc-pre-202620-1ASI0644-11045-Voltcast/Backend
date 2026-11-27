@@ -32,6 +32,7 @@ class HideOAuthParams(logging.Filter):
     """The access log prints the whole URL, and the OAuth callback carries the authorization code and the state."""
 
     def filter(self, record: logging.LogRecord) -> bool:
+        """Mask OAuth code and state values in access log records."""
         if isinstance(record.args, tuple) and len(record.args) > 2 and isinstance(record.args[2], str):
             hidden = re.sub(r"\b(code|state)=[^&\s]*", r"\1=***", record.args[2])
             record.args = (*record.args[:2], hidden, *record.args[3:])
@@ -44,6 +45,7 @@ ROLES_SEED = [ROLE_ADMIN, ROLE_USER]  # Supervisor, Ingeniero de Planta
 
 
 async def seed_roles():
+    """Insert the roles that do not exist yet."""
     async with AsyncSessionLocal() as session:
         for role_name in ROLES_SEED:
             result = await session.execute(select(Role).where(Role.name == role_name))
@@ -53,6 +55,7 @@ async def seed_roles():
 
 
 async def seed_notification_types():
+    """Insert the notification types that do not exist yet."""
     async with AsyncSessionLocal() as session:
         known = set((await session.execute(select(NotificationType.type))).scalars())
         session.add_all(
@@ -90,6 +93,7 @@ async def seed_supervisor():
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    """Prepare the database and seed data on startup, and close connections on shutdown."""
     await init_db()
     async with engine.begin() as connection:
         await sync_cell_management_schema(connection)
@@ -123,4 +127,5 @@ app.include_router(drive_router)
 
 @app.get("/")
 async def root():
+    """Return a greeting that shows the API is up."""
     return {"message": "Hello World"}
